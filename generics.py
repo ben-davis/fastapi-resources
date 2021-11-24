@@ -73,7 +73,6 @@ class SQLResource(Protocol):
 
 class BaseSQLResource:
     def __init__(self: SQLResource, *args, **kwargs):
-        print("Init", self)
         # # Build the relationships for the Db model
         annotations = typing.get_type_hints(self.Db)
         relationship_fields = self.Db.__sqlmodel_relationships__.keys()
@@ -121,7 +120,6 @@ class BaseSQLResource:
             def factory(_method_name):
                 def wrapper(*args, **kwargs):
                     class_method = getattr(self.__class__, _method_name)
-                    print("Class method", _method_name)
                     return class_method(self, *args, **kwargs)
 
                 return wrapper
@@ -276,7 +274,6 @@ class ResourceRouter(APIRouter):
             )(resource.list)
 
         if resource.create:
-            print("CONNECTING", resource.create)
             self.post(
                 f"/", response_model=JAResponse[JAResource[Read]], summary=f"Create {resource.name}"
             )(resource.create)
