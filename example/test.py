@@ -1,9 +1,9 @@
 from typing import List, Optional
 
-from fastapi import FastAPI
-from sqlmodel import Field, Relationship, SQLModel, create_engine
+from fastapi import FastAPI, Request
+from sqlmodel import Field, Relationship, Session, SQLModel, create_engine
 
-import generics
+from fastapi_rest_framework import resources, routers
 
 sqlite_file_name = "database.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
@@ -19,7 +19,7 @@ class TeamBase(SQLModel):
 
 
 class Team(TeamBase, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: Optional[str] = Field(default=None, primary_key=True)
 
     heroes: List["Hero"] = Relationship(back_populates="team")
 
@@ -33,7 +33,7 @@ class TeamRead(TeamBase):
 
 
 class TeamUpdate(SQLModel):
-    id: Optional[int] = None
+    id: Optional[str] = None
     name: Optional[str] = None
     headquarters: Optional[str] = None
 
@@ -72,7 +72,7 @@ def on_startup():
     SQLModel.metadata.create_all(engine)
 
 
-class TeamResource(generics.FullResource):
+class TeamResource(resources.SQLModelResource):
     name = "team"
     engine = engine
     Db = Team
@@ -81,7 +81,7 @@ class TeamResource(generics.FullResource):
     Update = TeamUpdate
 
 
-class HeroResource(generics.FullResource):
+class HeroResource(resources.SQLModelResource):
     name = "hero"
     engine = engine
     Db = Hero
@@ -93,10 +93,8 @@ class HeroResource(generics.FullResource):
 hero_resource = HeroResource()
 team_resource = TeamResource()
 
-team = generics.ResourceRouter(prefix="/teams", resource=team_resource, tags=["Teams"])
-hero = generics.ResourceRouter(
-    prefix="/heroes", resource=hero_resource, tags=["Heroes"]
-)
+team = routers.ResourceRouter(prefix="/teams", resource=team_resource, tags=["Teams"])
+hero = routers.ResourceRouter(prefix="/heroes", resource=hero_resource, tags=["Heroes"])
 
 app.include_router(hero)
 app.include_router(team)
@@ -107,7 +105,7 @@ TODO:
 x Relationships and automatically supported and documented `includes` with efficient prefetches.
 - Nested relationships
 - Post create & update hooks.
-- An equivalent of get_queryset so users can do row-level permissions.
+x An equivalent of get_queryset so users can do row-level permissions.
 - How to support actions?
 - Can JSON:API be an optional thing?
 """

@@ -4,7 +4,6 @@ import typing
 from typing import (
     Any,
     Callable,
-    Dict,
     Generic,
     List,
     Literal,
@@ -15,18 +14,29 @@ from typing import (
     Union,
 )
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import HTTPException, Request
 from pydantic.generics import GenericModel
 from sqlalchemy.future.engine import Engine
+from sqlalchemy.orm import exc as sa_exceptions
 from sqlalchemy.orm import joinedload
 from sqlmodel import Session, SQLModel, select
 from sqlmodel.sql.expression import SelectOfScalar
 
-TCreate = TypeVar("TCreate", bound=SQLModel)
-TUpdate = TypeVar("TUpdate", bound=SQLModel)
+
+class TCreate(SQLModel):
+    pass
+
+
+class TUpdate(SQLModel):
+    pass
+
+
+class TIncludeParam(str):
+    pass
+
+
 TRead = TypeVar("TRead", bound=SQLModel)
 TDb = TypeVar("TDb", bound=SQLModel)
-TIncludeParam = TypeVar("TIncludeParam", bound=str, contravariant=True)
 TypeVarType = Any
 
 
@@ -42,27 +52,20 @@ class JAResource(GenericModel, Generic[TRead]):
     attributes: TRead
 
 
-TJAResource = TypeVar("TJAResource")
-
-
-class JAResponseSingle(GenericModel, Generic[TJAResource]):
-    data: TJAResource
+class JAResponseSingle(GenericModel, Generic[TRead]):
+    data: JAResource[TRead]
     # Todo
     included: List[dict]
 
 
-class JAResponseList(GenericModel, Generic[TJAResource]):
-    data: List[TJAResource]
+class JAResponseList(GenericModel, Generic[TRead]):
+    data: List[TRead]
     # Todo
     included: List[dict]
 
 
-class DBSQLModel(Protocol):
-    id: Union[str, int]
-
-
-class GetInclusions(Protocol, Generic[TIncludeParam]):
-    def __call__(self, request: Request, include: TIncludeParam = None) -> list[str]:
+class GetInclusions(Protocol):
+    def __call__(self, request: Request, include: Optional[str] = None) -> list[str]:
         ...
 
 
@@ -73,14 +76,25 @@ class GetSelect(Protocol):
         ...
 
 
-class BuildResponse(Protocol, Generic[TDb]):
+class GetObject(Protocol):
     def __call__(
-        self, rows: list[TDb], request: Request, inclusions: list[str]
+        self,
+        id: int | str,
+        request: Request,
+        session: Session,
+        inclusions: Optional[list[str]] = None,
+    ) -> SQLModel:
+        ...
+
+
+class BuildResponse(Protocol):
+    def __call__(
+        self, rows: list[SQLModel], request: Request, inclusions: list[str]
     ) -> Union[JAResponseSingle, JAResponseList]:
         ...
 
 
-class SQLResource(Protocol, Generic[TDb, TIncludeParam]):
+class SQLResource(Protocol):
     name: str
     engine: Engine
 
@@ -98,13 +112,21 @@ class SQLResource(Protocol, Generic[TDb, TIncludeParam]):
     delete: Optional[Callable]
     retrieve: Optional[Callable]
 
+    RetrieveResponseModel: Type[SQLModel] | Type[GenericModel]
+    ListResponseModel: Type[SQLModel] | Type[GenericModel]
+
     get_select: GetSelect
-    get_inclusions: GetInclusions[TIncludeParam]
-    build_response: BuildResponse[TDb]
+    get_object: GetObject
+    get_inclusions: GetInclusions
+    build_response: BuildResponse
 
 
-class BaseSQLResource(SQLResource, Generic[TDb]):
+class BaseSQLResource(SQLResource):
     def __init__(self, *args, **kwargs):
+        # Build response models
+        self.RetrieveResponseModel = JAResponseSingle[self.Read]
+        self.ListResponseModel = JAResponseList[self.Read]
+
         # # Build the relationships for the Db model
         annotations = typing.get_type_hints(self.Db)
         relationship_fields = self.Db.__sqlmodel_relationships__.keys()
@@ -123,11 +145,12 @@ class BaseSQLResource(SQLResource, Generic[TDb]):
             )
 
         # Params to replace
+        include_param = {TIncludeParam: Literal[tuple(relationship_fields)]}
         methods = {
-            "create": {TCreate: self.Create},
-            "update": {TUpdate: self.Update},
-            "retrieve": {TIncludeParam: Literal[tuple(relationship_fields)]},
-            "list": {TIncludeParam: Literal[tuple(relationship_fields)]},
+            "create": {TCreate: self.Create, **include_param},
+            "update": {TUpdate: self.Update, **include_param},
+            "retrieve": include_param,
+            "list": include_param,
         }
 
         for method_name, replacements in methods.items():
@@ -175,7 +198,28 @@ class BaseSQLResource(SQLResource, Generic[TDb]):
 
         return select(self.Db).options(*options)
 
-    def build_response(self, rows: list[TDb], request: Request, inclusions: list[str]):
+    def get_object(
+        self,
+        request: Request,
+        session: Session,
+        id: int | str,
+        inclusions: Optional[list[str]] = None,
+    ):
+        select = self.get_select(request=request, inclusions=inclusions)
+
+        try:
+            return session.exec(select.where(self.Db.id == id)).unique().one()
+        except sa_exceptions.NoResultFound:
+            raise HTTPException(status_code=404, detail=f"{self.name} not found")
+
+    # Feels like this is the actual thing that handles JSON-API.
+    # Additionally, filters/sorting could be applied by override the `list` to provide extra
+    # params.
+    # But it would also requirea a different router to because the response models would be different
+    # I suppose that could be something built by the resource
+    def build_response(
+        self, rows: list[SQLModel], request: Request, inclusions: list[str]
+    ):
         included_resources = {}
         rows = rows if isinstance(rows, list) else [rows]
 
@@ -207,20 +251,31 @@ class BaseSQLResource(SQLResource, Generic[TDb]):
         )
 
 
-class CreateResourceMixin(Generic[TCreate]):
-    def create(self: SQLResource, model: TCreate):
+class CreateResourceMixin:
+    def create(
+        self: SQLResource,
+        request: Request,
+        model: TCreate,
+        include: TIncludeParam = None,
+    ):
         with Session(self.engine) as session:
             row = self.Db.from_orm(model)
             session.add(row)
             session.commit()
-            session.refresh(row)
 
-            return JAResponseSingle(
-                data=JAResource(id=row.id, attributes=row, type=self.name), included=[]
+            inclusions = self.get_inclusions(request=request, include=include)
+            row = self.get_object(
+                id=row.id, session=session, request=request, inclusions=inclusions
+            )
+
+            return self.build_response(
+                rows=[row],
+                request=request,
+                inclusions=inclusions,
             )
 
 
-class UpdateResourceMixin(Generic[TUpdate, TIncludeParam]):
+class UpdateResourceMixin:
     def update(
         self: SQLResource,
         *,
@@ -231,12 +286,9 @@ class UpdateResourceMixin(Generic[TUpdate, TIncludeParam]):
     ):
         with Session(self.engine) as session:
             inclusions = self.get_inclusions(request=request, include=include)
-            select = self.get_select(request=request, inclusions=inclusions)
-
-            row = session.exec(select.where(self.Db.id == id)).unique().one()
-
-            if not row:
-                raise HTTPException(status_code=404, detail=f"{self.name} not found")
+            row = self.get_object(
+                id=id, session=session, request=request, inclusions=inclusions
+            )
 
             data = model.dict(exclude_unset=True)
             for key, value in data.items():
@@ -253,13 +305,13 @@ class UpdateResourceMixin(Generic[TUpdate, TIncludeParam]):
             )
 
 
-class ListResourceMixin(Generic[TIncludeParam]):
+class ListResourceMixin:
     def list(self: SQLResource, request: Request, include: TIncludeParam = None):
         with Session(self.engine) as session:
             inclusions = self.get_inclusions(request=request, include=include)
             select = self.get_select(request=request, inclusions=inclusions)
 
-            rows = session.exec(select).all()
+            rows = session.exec(select).unique().all()
 
             return self.build_response(
                 rows=rows,
@@ -268,20 +320,15 @@ class ListResourceMixin(Generic[TIncludeParam]):
             )
 
 
-class RetrieveResourceMixin(Generic[TIncludeParam]):
+class RetrieveResourceMixin:
     def retrieve(
         self: SQLResource, *, id: int, include: TIncludeParam = None, request: Request
     ):
         with Session(self.engine) as session:
             inclusions = self.get_inclusions(request=request, include=include)
-            select = self.get_select(request=request, inclusions=inclusions)
-
-            row = session.exec(select.where(self.Db.id == id)).unique().one()
-
-            if not row:
-                raise HTTPException(
-                    status_code=404, detail=f"{self.name.title()} not found"
-                )
+            row = self.get_object(
+                id=id, session=session, request=request, inclusions=inclusions
+            )
 
             return self.build_response(
                 rows=[row],
@@ -293,11 +340,7 @@ class RetrieveResourceMixin(Generic[TIncludeParam]):
 class DeleteResourceMixin:
     def delete(self: SQLResource, *, id: int, request: Request):
         with Session(self.engine) as session:
-            select = self.get_select(request=request)
-            row = session.exec(select.where(self.Db.id == id)).unique().one()
-
-            if not row:
-                raise HTTPException(status_code=404, detail=f"{self.name} not found")
+            row = self.get_object(id=id, session=session, request=request)
 
             session.delete(row)
             session.commit()
@@ -314,62 +357,16 @@ class ListCreateUpdateResource(
     CreateResourceMixin,
     UpdateResourceMixin,
     BaseSQLResource,
-    Generic[TCreate, TUpdate],
 ):
     pass
 
 
-class FullResource(
+class SQLModelResource(
     RetrieveResourceMixin,
     ListResourceMixin,
     CreateResourceMixin,
     UpdateResourceMixin,
     DeleteResourceMixin,
     BaseSQLResource,
-    Generic[TCreate, TUpdate],
 ):
     pass
-
-
-class ResourceRouter(APIRouter):
-    def __init__(
-        self,
-        *,
-        resource: SQLResource,
-        **kwargs,
-    ) -> None:
-        super().__init__(**kwargs)
-
-        Read = resource.Read
-
-        if resource.retrieve:
-            self.get(
-                f"/{{id}}",
-                response_model=JAResponseSingle[JAResource[Read]],
-                summary=f"Get {resource.name}",
-            )(resource.retrieve)
-
-        if resource.list:
-
-            self.get(
-                f"/",
-                response_model=JAResponseList[JAResource[Read]],
-                summary=f"Get {resource.name} list",
-            )(resource.list)
-
-        if resource.create:
-            self.post(
-                f"/",
-                response_model=JAResponseSingle[JAResource[Read]],
-                summary=f"Create {resource.name}",
-            )(resource.create)
-
-        if resource.update:
-            self.patch(
-                f"/{{id}}",
-                response_model=JAResponseSingle[JAResource[Read]],
-                summary=f"Update {resource.name}",
-            )(resource.update)
-
-        if resource.delete:
-            self.delete(f"/{{id}}", summary=f"Delete {resource.name}")(resource.delete)
