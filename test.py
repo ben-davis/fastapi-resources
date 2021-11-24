@@ -29,7 +29,7 @@ class TeamCreate(TeamBase):
 
 
 class TeamRead(TeamBase):
-    id: int
+    id: str
 
 
 class TeamUpdate(SQLModel):
@@ -57,7 +57,7 @@ class HeroCreate(HeroBase):
 
 
 class HeroRead(HeroBase):
-    id: int
+    id: str
 
 
 class HeroUpdate(SQLModel):
@@ -80,6 +80,7 @@ class TeamResource(generics.FullResource):
     Create = TeamCreate
     Update = TeamUpdate
 
+
 class HeroResource(generics.FullResource):
     name = "hero"
     engine = engine
@@ -87,8 +88,6 @@ class HeroResource(generics.FullResource):
     Read = HeroRead
     Create = HeroCreate
     Update = HeroUpdate
-
-
 
 
 hero_resource = HeroResource()
@@ -105,8 +104,10 @@ app.include_router(team)
 
 """
 TODO:
-- Relationships and automatically supported and documented `includes` with efficient prefetches.
+x Relationships and automatically supported and documented `includes` with efficient prefetches.
+- Nested relationships
 - Post create & update hooks.
 - An equivalent of get_queryset so users can do row-level permissions.
 - How to support actions?
+- Can JSON:API be an optional thing?
 """
