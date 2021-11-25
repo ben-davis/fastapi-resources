@@ -37,12 +37,13 @@ class TIncludeParam(str):
 
 TRead = TypeVar("TRead", bound=SQLModel)
 TDb = TypeVar("TDb", bound=SQLModel)
+TIncluded = TypeVar("TIncluded")
 TypeVarType = Any
 
 
 @dataclasses.dataclass
 class Relationship:
-    schema: SQLModel
+    schema: Type[SQLModel]
     many: bool
 
 
@@ -52,16 +53,14 @@ class JAResource(GenericModel, Generic[TRead]):
     attributes: TRead
 
 
-class JAResponseSingle(GenericModel, Generic[TRead]):
+class JAResponseSingle(GenericModel, Generic[TRead, TIncluded]):
     data: JAResource[TRead]
-    # Todo
-    included: List[dict]
+    included: List[TIncluded]
 
 
-class JAResponseList(GenericModel, Generic[TRead]):
-    data: List[TRead]
-    # Todo
-    included: List[dict]
+class JAResponseList(GenericModel, Generic[TRead, TIncluded]):
+    data: List[JAResource[TRead]]
+    included: List[TIncluded]
 
 
 class GetInclusions(Protocol):
@@ -89,7 +88,7 @@ class GetObject(Protocol):
 
 class BuildResponse(Protocol):
     def __call__(
-        self, rows: list[SQLModel], request: Request, inclusions: list[str]
+        self, rows: list[SQLModel], request: Request, inclusions: list[str], many: bool = False
     ) -> Union[JAResponseSingle, JAResponseList]:
         ...
 
@@ -98,7 +97,7 @@ class SQLResource(Protocol):
     name: str
     engine: Engine
 
-    relationships: dict[str, Relationship] = {}
+    relationships: dict[str, Relationship]
 
     Db: Type[SQLModel]
     Read: Type[SQLModel]
@@ -121,28 +120,44 @@ class SQLResource(Protocol):
     build_response: BuildResponse
 
 
+def get_related_schema(annotation: Any):
+    args = typing.get_args(annotation)
+    if args:
+        generic_arg = args[0]
+        if issubclass(generic_arg, SQLModel):
+            # Generic assumes first arg is the model
+            return generic_arg
+
+        raise ValueError("Unsupported generic relationship type. Must be a single arg.")
+
+    if issubclass(annotation, SQLModel):
+        return annotation
+
+    raise ValueError(f"Unsupported relationship type {annotation}")
+
+
 class BaseSQLResource(SQLResource):
     def __init__(self, *args, **kwargs):
-        # Build response models
-        self.RetrieveResponseModel = JAResponseSingle[self.Read]
-        self.ListResponseModel = JAResponseList[self.Read]
-
         # # Build the relationships for the Db model
         annotations = typing.get_type_hints(self.Db)
         relationship_fields = self.Db.__sqlmodel_relationships__.keys()
-        self.relationships = {
-            field: typing.get_args(annotations[field])[0]
-            for field in relationship_fields
-        }
+
+        self.relationships = {}
 
         for field in relationship_fields:
             annotated_type = annotations[field]
+            related_schema = get_related_schema(annotated_type)
             many = typing.get_origin(annotated_type) == list
 
             self.relationships[field] = Relationship(
-                schema=typing.get_args(annotated_type)[0],
+                schema=related_schema,
                 many=many,
             )
+
+        # Build response models
+        Included = tuple(r.schema for r in self.relationships.values())
+        self.RetrieveResponseModel = JAResponseSingle[self.Read, Union[Included]]
+        self.ListResponseModel = JAResponseList[self.Read, Union[Included]]
 
         # Params to replace
         include_param = {TIncludeParam: Literal[tuple(relationship_fields)]}
@@ -218,10 +233,9 @@ class BaseSQLResource(SQLResource):
     # But it would also requirea a different router to because the response models would be different
     # I suppose that could be something built by the resource
     def build_response(
-        self, rows: list[SQLModel], request: Request, inclusions: list[str]
+        self, rows: list[SQLModel], request: Request, inclusions: list[str], many: bool = False,
     ):
         included_resources = {}
-        rows = rows if isinstance(rows, list) else [rows]
 
         for row in rows:
             for inclusion in inclusions:
@@ -244,9 +258,12 @@ class BaseSQLResource(SQLResource):
                     )
 
         data = [JAResource(id=row.id, attributes=row, type=self.name) for row in rows]
+        data = data if many else data[0]
+        ResponseSchema = JAResponseList if many else JAResponseSingle
+        print(data)
 
-        return JAResponseSingle(
-            data=data if len(data) > 1 else data[0],
+        return ResponseSchema(
+            data=data,
             included=list(included_resources.values()),
         )
 
@@ -317,6 +334,7 @@ class ListResourceMixin:
                 rows=rows,
                 request=request,
                 inclusions=inclusions,
+                many=True,
             )
 
 
