@@ -155,7 +155,7 @@ class BaseSQLResource(SQLResource):
             )
 
         # Build response models
-        Included = tuple(r.schema for r in self.relationships.values())
+        Included = tuple(JAResource[r.schema] for r in self.relationships.values())
         self.RetrieveResponseModel = JAResponseSingle[self.Read, Union[Included]]
         self.ListResponseModel = JAResponseList[self.Read, Union[Included]]
 
