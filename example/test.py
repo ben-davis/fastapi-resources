@@ -13,15 +13,43 @@ engine = create_engine(sqlite_url, echo=True)
 app = FastAPI()
 
 
+class PlanetBase(SQLModel):
+    star: str
+    location: str
+
+
+class Planet(PlanetBase, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    teams: List["Team"] = Relationship(back_populates="planet")
+
+
+class PlanetCreate(PlanetBase):
+    pass
+
+
+class PlanetRead(PlanetBase):
+    id: str
+
+
+class PlanetUpdate(SQLModel):
+    id: Optional[str] = None
+    star: Optional[str] = None
+    location: Optional[str] = None
+
+
 class TeamBase(SQLModel):
     name: str
     headquarters: str
 
+    planet_id: Optional[int] = Field(default=None, foreign_key="planet.id")
+
 
 class Team(TeamBase, table=True):
-    id: Optional[str] = Field(default=None, primary_key=True)
+    id: Optional[int] = Field(default=None, primary_key=True)
 
     heroes: List["Hero"] = Relationship(back_populates="team")
+    planet: Optional[Planet] = Relationship(back_populates="teams")
 
 
 class TeamCreate(TeamBase):
@@ -90,14 +118,28 @@ class HeroResource(resources.SQLModelResource):
     Update = HeroUpdate
 
 
-hero_resource = HeroResource()
-team_resource = TeamResource()
+class PlanetResource(resources.SQLModelResource):
+    name = "planet"
+    engine = engine
+    Db = Planet
+    Read = PlanetRead
+    Create = PlanetCreate
+    Update = PlanetUpdate
 
-team = routers.ResourceRouter(prefix="/teams", resource=team_resource, tags=["Teams"])
-hero = routers.ResourceRouter(prefix="/heroes", resource=hero_resource, tags=["Heroes"])
+
+team = routers.JSONAPIResourceRouter(
+    prefix="/teams", resource_class=TeamResource, tags=["Teams"]
+)
+hero = routers.JSONAPIResourceRouter(
+    prefix="/heroes", resource_class=HeroResource, tags=["Heroes"]
+)
+planet = routers.JSONAPIResourceRouter(
+    prefix="/planets", resource_class=PlanetResource, tags=["Planets"]
+)
 
 app.include_router(hero)
 app.include_router(team)
+app.include_router(planet)
 
 
 """
@@ -105,6 +147,7 @@ TODO:
 x Relationships and automatically supported and documented `includes` with efficient prefetches.
 - Nested relationships
 - Post create & update hooks.
+    - Ensure it can support things like easily saving the user from the request as an attr on a model
 x An equivalent of get_queryset so users can do row-level permissions.
 - How to support actions?
 - Can JSON:API be an optional thing?

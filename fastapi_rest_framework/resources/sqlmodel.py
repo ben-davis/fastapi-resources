@@ -1,77 +1,20 @@
-import dataclasses
-import inspect
+import operator
 import typing
-from typing import (
-    Any,
-    Callable,
-    Generic,
-    List,
-    Literal,
-    Optional,
-    Protocol,
-    Type,
-    TypeVar,
-    Union,
-)
+from dataclasses import dataclass
+from typing import Any, ClassVar, Optional, Protocol, Type
 
-from fastapi import HTTPException, Request
-from pydantic.generics import GenericModel
-from sqlalchemy.future.engine import Engine
+from fastapi import HTTPException
+from sqlalchemy.engine.base import Engine
 from sqlalchemy.orm import exc as sa_exceptions
 from sqlalchemy.orm import joinedload
 from sqlmodel import Session, SQLModel, select
 from sqlmodel.sql.expression import SelectOfScalar
 
-
-class TCreate(SQLModel):
-    pass
-
-
-class TUpdate(SQLModel):
-    pass
-
-
-class TIncludeParam(str):
-    pass
-
-
-TRead = TypeVar("TRead", bound=SQLModel)
-TDb = TypeVar("TDb", bound=SQLModel)
-TIncluded = TypeVar("TIncluded")
-TypeVarType = Any
-
-
-@dataclasses.dataclass
-class Relationship:
-    schema: Type[SQLModel]
-    many: bool
-
-
-class JAResource(GenericModel, Generic[TRead]):
-    id: str
-    type: str
-    attributes: TRead
-
-
-class JAResponseSingle(GenericModel, Generic[TRead, TIncluded]):
-    data: JAResource[TRead]
-    included: List[TIncluded]
-
-
-class JAResponseList(GenericModel, Generic[TRead, TIncluded]):
-    data: List[JAResource[TRead]]
-    included: List[TIncluded]
-
-
-class GetInclusions(Protocol):
-    def __call__(self, request: Request, include: Optional[str] = None) -> list[str]:
-        ...
+from fastapi_rest_framework.resources import base_resource, types
 
 
 class GetSelect(Protocol):
-    def __call__(
-        self, request: Request, inclusions: Optional[list[str]] = None
-    ) -> SelectOfScalar:
+    def __call__(self) -> SelectOfScalar:
         ...
 
 
@@ -79,45 +22,29 @@ class GetObject(Protocol):
     def __call__(
         self,
         id: int | str,
-        request: Request,
         session: Session,
-        inclusions: Optional[list[str]] = None,
     ) -> SQLModel:
         ...
 
 
-class BuildResponse(Protocol):
-    def __call__(
-        self, rows: list[SQLModel], request: Request, inclusions: list[str], many: bool = False
-    ) -> Union[JAResponseSingle, JAResponseList]:
-        ...
+@dataclass
+class SQLModelRelationship:
+    schema: Type[SQLModel]
+    many: bool
 
 
-class SQLResource(Protocol):
-    name: str
-    engine: Engine
+class SQLResourceProtocol(types.ResourceProtocol, Protocol):
+    engine: ClassVar[Engine]
 
-    relationships: dict[str, Relationship]
+    Db: ClassVar[Type[SQLModel]]
+    Read: ClassVar[Type[SQLModel]]
+    relationships: ClassVar[dict[str, SQLModelRelationship]]
 
-    Db: Type[SQLModel]
-    Read: Type[SQLModel]
-
-    Create: Optional[Type[SQLModel]]
-    Update: Optional[Type[SQLModel]]
-
-    create: Optional[Callable]
-    list: Optional[Callable]
-    update: Optional[Callable]
-    delete: Optional[Callable]
-    retrieve: Optional[Callable]
-
-    RetrieveResponseModel: Type[SQLModel] | Type[GenericModel]
-    ListResponseModel: Type[SQLModel] | Type[GenericModel]
+    Create: ClassVar[Optional[Type[SQLModel]]]
+    Update: ClassVar[Optional[Type[SQLModel]]]
 
     get_select: GetSelect
     get_object: GetObject
-    get_inclusions: GetInclusions
-    build_response: BuildResponse
 
 
 def get_related_schema(annotation: Any):
@@ -136,176 +63,86 @@ def get_related_schema(annotation: Any):
     raise ValueError(f"Unsupported relationship type {annotation}")
 
 
-class BaseSQLResource(SQLResource):
-    def __init__(self, *args, **kwargs):
+class BaseSQLResource(base_resource.Resource):
+    engine: ClassVar[Engine]
+
+    Db: ClassVar[Type[SQLModel]]
+    Read: ClassVar[Type[SQLModel]]
+
+    Create: ClassVar[Optional[Type[SQLModel]]]
+    Update: ClassVar[Optional[Type[SQLModel]]]
+
+    @classmethod
+    def get_relationships(cls) -> dict[str, SQLModelRelationship]:
         # # Build the relationships for the Db model
-        annotations = typing.get_type_hints(self.Db)
-        relationship_fields = self.Db.__sqlmodel_relationships__.keys()
+        annotations = typing.get_type_hints(cls.Db)
+        relationship_fields = cls.Db.__sqlmodel_relationships__.keys()
 
-        self.relationships = {}
+        relationships = {}
 
+        # TODO: Support nested
         for field in relationship_fields:
             annotated_type = annotations[field]
             related_schema = get_related_schema(annotated_type)
+
+            # TODO: Use related_schema to build nested, stopping if its circular
             many = typing.get_origin(annotated_type) == list
 
-            self.relationships[field] = Relationship(
+            relationships[field] = SQLModelRelationship(
                 schema=related_schema,
                 many=many,
             )
 
-        # Build response models
-        Included = tuple(JAResource[r.schema] for r in self.relationships.values())
-        self.RetrieveResponseModel = JAResponseSingle[self.Read, Union[Included]]
-        self.ListResponseModel = JAResponseList[self.Read, Union[Included]]
+        return relationships
 
-        # Params to replace
-        include_param = {TIncludeParam: Literal[tuple(relationship_fields)]}
-        methods = {
-            "create": {TCreate: self.Create, **include_param},
-            "update": {TUpdate: self.Update, **include_param},
-            "retrieve": include_param,
-            "list": include_param,
-        }
-
-        for method_name, replacements in methods.items():
-            method_instance = getattr(self, method_name, None)
-
-            if not method_instance:
-                continue
-
-            original_signature = inspect.signature(method_instance)
-            updated_params = [
-                inspect.Parameter(
-                    name=param.name,
-                    kind=param.kind,
-                    default=param.default,
-                    annotation=replacements.get(param.annotation, param.annotation),
-                )
-                for param in original_signature.parameters.values()
-            ]
-            updated_signature = inspect.Signature(updated_params)
-
-            # Required to avoid closing over method_name
-            def factory(_method_name):
-                def wrapper(*args, **kwargs):
-                    class_method = getattr(self.__class__, _method_name)
-                    return class_method(self, *args, **kwargs)
-
-                return wrapper
-
-            setattr(self, method_name, factory(method_name))
-            getattr(self, method_name).__signature__ = updated_signature
-
-        return super().__init__(*args, **kwargs)
-
-    def get_inclusions(self, request: Request, include: str = None):
-        # TODO: Support nested
-        return include.split(",") if include else []
-
-    def get_select(self, request: Request, inclusions: Optional[list[str]] = None):
+    def get_select(self):
         options = []
-        inclusions = inclusions or []
+        inclusions = self.inclusions or []
 
         # Build the query options based on the include
         for inclusion in inclusions:
-            options.append(joinedload(getattr(self.Db, inclusion)))
+            attr = operator.attrgetter(".".join([inclusion]))(self.Db)
+            options.append(joinedload(attr))
 
         return select(self.Db).options(*options)
 
     def get_object(
         self,
-        request: Request,
         session: Session,
         id: int | str,
-        inclusions: Optional[list[str]] = None,
     ):
-        select = self.get_select(request=request, inclusions=inclusions)
+        select = self.get_select()
 
         try:
             return session.exec(select.where(self.Db.id == id)).unique().one()
         except sa_exceptions.NoResultFound:
             raise HTTPException(status_code=404, detail=f"{self.name} not found")
 
-    # Feels like this is the actual thing that handles JSON-API.
-    # Additionally, filters/sorting could be applied by override the `list` to provide extra
-    # params.
-    # But it would also requirea a different router to because the response models would be different
-    # I suppose that could be something built by the resource
-    def build_response(
-        self, rows: list[SQLModel], request: Request, inclusions: list[str], many: bool = False,
-    ):
-        included_resources = {}
-
-        for row in rows:
-            for inclusion in inclusions:
-                included_objs = getattr(row, inclusion)
-                if not included_objs:
-                    continue
-
-                included_objs = (
-                    [included_objs]
-                    if not isinstance(included_objs, list)
-                    else included_objs
-                )
-
-                for included_obj in included_objs:
-                    schema = self.relationships[inclusion].schema
-                    included_resources[included_obj.id] = JAResource(
-                        id=included_obj.id,
-                        type=inclusion,
-                        attributes=schema.from_orm(included_obj),
-                    )
-
-        data = [JAResource(id=row.id, attributes=row, type=self.name) for row in rows]
-        data = data if many else data[0]
-        ResponseSchema = JAResponseList if many else JAResponseSingle
-        print(data)
-
-        return ResponseSchema(
-            data=data,
-            included=list(included_resources.values()),
-        )
-
 
 class CreateResourceMixin:
     def create(
-        self: SQLResource,
-        request: Request,
-        model: TCreate,
-        include: TIncludeParam = None,
+        self: SQLResourceProtocol,
+        model: SQLModel,
     ):
         with Session(self.engine) as session:
             row = self.Db.from_orm(model)
             session.add(row)
             session.commit()
 
-            inclusions = self.get_inclusions(request=request, include=include)
-            row = self.get_object(
-                id=row.id, session=session, request=request, inclusions=inclusions
-            )
+            row = self.get_object(id=row.id, session=session)
 
-            return self.build_response(
-                rows=[row],
-                request=request,
-                inclusions=inclusions,
-            )
+            return row
 
 
 class UpdateResourceMixin:
     def update(
-        self: SQLResource,
+        self: SQLResourceProtocol,
         *,
-        id: int,
-        model: TUpdate,
-        request: Request,
-        include: TIncludeParam = None,
+        id: int | str,
+        model: SQLModel,
     ):
         with Session(self.engine) as session:
-            inclusions = self.get_inclusions(request=request, include=include)
-            row = self.get_object(
-                id=id, session=session, request=request, inclusions=inclusions
-            )
+            row = self.get_object(id=id, session=session)
 
             data = model.dict(exclude_unset=True)
             for key, value in data.items():
@@ -315,50 +152,31 @@ class UpdateResourceMixin:
             session.commit()
             session.refresh(row)
 
-            return self.build_response(
-                rows=[row],
-                request=request,
-                inclusions=inclusions,
-            )
+            return row
 
 
 class ListResourceMixin:
-    def list(self: SQLResource, request: Request, include: TIncludeParam = None):
+    def list(self: SQLResourceProtocol):
         with Session(self.engine) as session:
-            inclusions = self.get_inclusions(request=request, include=include)
-            select = self.get_select(request=request, inclusions=inclusions)
+            select = self.get_select()
 
             rows = session.exec(select).unique().all()
 
-            return self.build_response(
-                rows=rows,
-                request=request,
-                inclusions=inclusions,
-                many=True,
-            )
+            return rows
 
 
 class RetrieveResourceMixin:
-    def retrieve(
-        self: SQLResource, *, id: int, include: TIncludeParam = None, request: Request
-    ):
+    def retrieve(self: SQLResourceProtocol, *, id: int | str):
         with Session(self.engine) as session:
-            inclusions = self.get_inclusions(request=request, include=include)
-            row = self.get_object(
-                id=id, session=session, request=request, inclusions=inclusions
-            )
+            row = self.get_object(id=id, session=session)
 
-            return self.build_response(
-                rows=[row],
-                request=request,
-                inclusions=inclusions,
-            )
+            return row
 
 
 class DeleteResourceMixin:
-    def delete(self: SQLResource, *, id: int, request: Request):
+    def delete(self: SQLResourceProtocol, *, id: int | str):
         with Session(self.engine) as session:
-            row = self.get_object(id=id, session=session, request=request)
+            row = self.get_object(id=id, session=session)
 
             session.delete(row)
             session.commit()
