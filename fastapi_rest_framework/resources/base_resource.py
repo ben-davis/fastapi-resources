@@ -16,8 +16,6 @@ class Relationship:
 class Resource:
     name: ClassVar[str]
 
-    relationships: ClassVar[dict[str, Relationship]]
-
     Db: ClassVar[Type[BaseModel]]
     Read: ClassVar[Type[BaseModel]]
 
@@ -36,3 +34,10 @@ class Resource:
     def __init__(self, request: Request, inclusions: Optional[Inclusions] = None):
         self.request = request
         self.inclusions = inclusions or []
+
+    @classmethod
+    def get_relationships(cls):
+        return []
+
+    def get_related(self, obj: BaseModel, field: str):
+        raise NotImplementedError()

@@ -7,11 +7,11 @@ from pydantic import BaseModel
 from fastapi_rest_framework.resources.base_resource import Resource
 
 
-class TCreate(BaseModel):
+class TCreatePayload(BaseModel):
     pass
 
 
-class TUpdate(BaseModel):
+class TUpdatePayload(BaseModel):
     pass
 
 
@@ -42,8 +42,8 @@ class ResourceRouter(APIRouter):
 
     def get_method_replacements(self):
         return {
-            "_create": {TCreate: self.resource_class.Create},
-            "_update": {TUpdate: self.resource_class.Update},
+            "_create": {TCreatePayload: self.resource_class.Create},
+            "_update": {TUpdatePayload: self.resource_class.Update},
         }
 
     def _patch_route_types(self):
@@ -144,20 +144,20 @@ class ResourceRouter(APIRouter):
         rows = resource.list()
         return self.build_response(rows=rows, resource=resource)
 
-    def _create(self, *, model: TCreate, request: Request):
+    def _create(self, *, create: TCreatePayload, request: Request):
         resource = self.get_resource(request=request)
         if not resource.create:
             raise NotImplementedError("Resource.create not implemented")
 
-        row = resource.create(model=model)
+        row = resource.create(model=create)
         return self.build_response(rows=row, resource=resource)
 
-    def _update(self, *, id: Union[int, str], model: TUpdate, request: Request):
+    def _update(self, *, id: Union[int, str], update: TUpdatePayload, request: Request):
         resource = self.get_resource(request=request)
         if not resource.update:
             raise NotImplementedError("Resource.update not implemented")
 
-        row = resource.update(id=id, model=model)
+        row = resource.update(id=id, model=update)
         return self.build_response(rows=row, resource=resource)
 
     def _delete(self, *, id: Union[int, str], request: Request):

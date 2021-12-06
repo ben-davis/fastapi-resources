@@ -1,10 +1,10 @@
 from typing import Any, Generic, List, Literal, TypeVar, Union
 
-from fastapi import Request
+from fastapi import Request, Response
 from pydantic.generics import GenericModel
 from sqlmodel import SQLModel
 
-from fastapi_rest_framework.resources.sqlmodel import SQLModelResource
+from fastapi_rest_framework.resources.base_resource import Resource
 from fastapi_rest_framework.resources.types import Inclusions
 from fastapi_rest_framework.routers import base_router
 
@@ -38,7 +38,7 @@ class JSONAPIResourceRouter(ResourceRouter):
     def __init__(
         self,
         *,
-        resource_class: type[SQLModelResource],
+        resource_class: type[Resource],
         **kwargs,
     ) -> None:
         self.resource_class = resource_class
@@ -47,17 +47,20 @@ class JSONAPIResourceRouter(ResourceRouter):
 
     def get_included_schema(self):
         relationships = self.resource_class.get_relationships()
-        return tuple(JAResource[r.schema] for r in relationships.values())
+        if not relationships:
+            return None
+
+        return Union[tuple(JAResource[r.schema] for r in relationships.values())]
 
     def get_read_response_model(self):
         Included = self.get_included_schema()
 
-        return JAResponseSingle[self.resource_class.Read, Union[Included]]
+        return JAResponseSingle[self.resource_class.Read, Included]
 
     def get_list_response_model(self):
         Included = self.get_included_schema()
 
-        return JAResponseList[self.resource_class.Read, Union[Included]]
+        return JAResponseList[self.resource_class.Read, Included]
 
     def get_method_replacements(self):
         method_replacements = super().get_method_replacements()
@@ -82,15 +85,10 @@ class JSONAPIResourceRouter(ResourceRouter):
 
         return self.resource_class(request=request, inclusions=inclusions)
 
-    # Feels like this is the actual thing that handles JSON-API.
-    # Additionally, filters/sorting could be applied by override the `list` to provide extra
-    # params.
-    # But it would also requirea a different router to because the response models would be different
-    # I suppose that could be something built by the resource
     def build_response(
         self,
         rows: Union[SQLModel, list[SQLModel]],
-        resource: SQLModelResource,
+        resource: Resource,
     ):
         included_resources = {}
 
@@ -100,7 +98,7 @@ class JSONAPIResourceRouter(ResourceRouter):
 
         for row in rows:
             for inclusion in resource.inclusions:
-                included_objs = getattr(row, inclusion)
+                included_objs = resource.get_related(obj=row, field=inclusion)
                 if not included_objs:
                     continue
 
@@ -141,23 +139,25 @@ class JSONAPIResourceRouter(ResourceRouter):
     def _create(
         self,
         *,
-        model: base_router.TCreate,
+        create: base_router.TCreatePayload,
         request: Request,
         include: TIncludeParam = None,
     ):
-        return super()._create(model=model, request=request)
+        return super()._create(create=create, request=request)
 
     def _update(
         self,
         *,
         id: Union[int, str],
-        model: base_router.TUpdate,
+        update: base_router.TUpdatePayload,
         request: Request,
         include: TIncludeParam = None,
     ):
-        return super()._update(id=id, model=model, request=request)
+        return super()._update(id=id, update=update, request=request)
 
     def _delete(
         self, *, id: Union[int, str], request: Request, include: TIncludeParam = None
     ):
-        return super()._delete(id=id, request=request)
+        super()._delete(id=id, request=request)
+
+        return Response(status_code=204)

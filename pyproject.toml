@@ -12,6 +12,9 @@ uvicorn = {extras = ["standard"], version = "^0.15.0"}
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.5"
+requests = "^2.26.0"
+pytest-watcher = "^0.2.1"
+pytest-clarity = "^1.0.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

@@ -1,7 +1,7 @@
 import operator
 import typing
 from dataclasses import dataclass
-from typing import Any, ClassVar, Optional, Protocol, Type
+from typing import Any, ClassVar, List, Optional, Protocol, Type, Union
 
 from fastapi import HTTPException
 from sqlalchemy.engine.base import Engine
@@ -27,10 +27,26 @@ class GetObject(Protocol):
         ...
 
 
+class GetRelated(Protocol):
+    def __call__(
+        self,
+        obj: SQLModel,
+        field: str,
+    ) -> Union[List[SQLModel], SQLModel]:
+        ...
+
+
 @dataclass
 class SQLModelRelationship:
     schema: Type[SQLModel]
     many: bool
+
+
+class GetRelationships(Protocol):
+    def __call__(
+        self,
+    ) -> List[SQLModelRelationship]:
+        ...
 
 
 class SQLResourceProtocol(types.ResourceProtocol, Protocol):
@@ -38,13 +54,14 @@ class SQLResourceProtocol(types.ResourceProtocol, Protocol):
 
     Db: ClassVar[Type[SQLModel]]
     Read: ClassVar[Type[SQLModel]]
-    relationships: ClassVar[dict[str, SQLModelRelationship]]
 
     Create: ClassVar[Optional[Type[SQLModel]]]
     Update: ClassVar[Optional[Type[SQLModel]]]
 
     get_select: GetSelect
     get_object: GetObject
+    get_relationships: GetRelationships
+    get_related: GetRelated
 
 
 def get_related_schema(annotation: Any):
@@ -73,7 +90,7 @@ class BaseSQLResource(base_resource.Resource):
     Update: ClassVar[Optional[Type[SQLModel]]]
 
     @classmethod
-    def get_relationships(cls) -> dict[str, SQLModelRelationship]:
+    def get_relationships(cls: SQLResourceProtocol) -> dict[str, SQLModelRelationship]:
         # # Build the relationships for the Db model
         annotations = typing.get_type_hints(cls.Db)
         relationship_fields = cls.Db.__sqlmodel_relationships__.keys()
@@ -95,7 +112,7 @@ class BaseSQLResource(base_resource.Resource):
 
         return relationships
 
-    def get_select(self):
+    def get_select(self: SQLResourceProtocol):
         options = []
         inclusions = self.inclusions or []
 
@@ -107,7 +124,7 @@ class BaseSQLResource(base_resource.Resource):
         return select(self.Db).options(*options)
 
     def get_object(
-        self,
+        self: SQLResourceProtocol,
         session: Session,
         id: int | str,
     ):
@@ -117,6 +134,13 @@ class BaseSQLResource(base_resource.Resource):
             return session.exec(select.where(self.Db.id == id)).unique().one()
         except sa_exceptions.NoResultFound:
             raise HTTPException(status_code=404, detail=f"{self.name} not found")
+
+    def get_related(
+        self: SQLResourceProtocol,
+        obj: SQLModel,
+        field: str,
+    ):
+        return getattr(obj, field)
 
 
 class CreateResourceMixin:
