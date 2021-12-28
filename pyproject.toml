@@ -3,6 +3,9 @@ name = "fastapi-rest-framework"
 version = "0.1.0"
 description = ""
 authors = ["Ben Davis <ben@bencdavis.com>"]
+packages = [
+    { include = "fastapi_rest_framework" }
+]
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -13,8 +16,8 @@ uvicorn = {extras = ["standard"], version = "^0.15.0"}
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.5"
 requests = "^2.26.0"
-pytest-watcher = "^0.2.1"
 pytest-clarity = "^1.0.1"
+pytest-watcher = "^0.2.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

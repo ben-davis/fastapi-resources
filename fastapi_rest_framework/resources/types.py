@@ -1,4 +1,4 @@
-from typing import Callable, ClassVar, List, Optional, Protocol, Type, Union
+from typing import Callable, ClassVar, List, Optional, Protocol, Type
 
 from fastapi import Request
 from pydantic.main import BaseModel
@@ -10,22 +10,6 @@ class RelationshipProtocol(Protocol):
 
 
 Inclusions = list[list[str]]
-
-
-class GetRelationships(Protocol):
-    def __call__(
-        self,
-    ) -> List[RelationshipProtocol]:
-        ...
-
-
-class GetRelated(Protocol):
-    def __call__(
-        self,
-        obj: BaseModel,
-        field: str,
-    ) -> Union[List[BaseModel], BaseModel]:
-        ...
 
 
 class ResourceProtocol(Protocol):
@@ -43,8 +27,14 @@ class ResourceProtocol(Protocol):
     delete: Optional[Callable]
     retrieve: Optional[Callable]
 
-    get_relationships: GetRelationships
-    get_related: GetRelated
-
     request: Request
     inclusions: Inclusions
+
+    @classmethod
+    def get_relationships(
+        cls,
+    ) -> dict[str, RelationshipProtocol]:
+        ...
+
+    def get_related(self, obj: BaseModel, field: str) -> BaseModel | List[BaseModel]:
+        ...

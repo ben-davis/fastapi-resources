@@ -121,7 +121,7 @@ class ResourceRouter(APIRouter):
             )
 
     def get_resource(self, request: Request):
-        return self.resource_class(request=request)
+        return self.resource_class()
 
     def build_response(
         self, resource: Resource, rows: Union[BaseModel, List[BaseModel]]

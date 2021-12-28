@@ -1,7 +1,7 @@
 from typing import List, Optional
 
-from fastapi import FastAPI, Request
-from sqlmodel import Field, Relationship, Session, SQLModel, create_engine
+from fastapi import FastAPI
+from sqlmodel import Field, Relationship, SQLModel, create_engine
 
 from fastapi_rest_framework import resources, routers
 

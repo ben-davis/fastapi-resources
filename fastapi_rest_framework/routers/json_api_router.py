@@ -50,17 +50,24 @@ class JSONAPIResourceRouter(ResourceRouter):
         if not relationships:
             return None
 
-        return Union[tuple(JAResource[r.schema] for r in relationships.values())]
+        return Union[
+            tuple(
+                JAResource[r.schema_with_relationships.schema]
+                for r in relationships.values()
+            )
+        ]
 
     def get_read_response_model(self):
         Included = self.get_included_schema()
+        Read = self.resource_class.Read
 
-        return JAResponseSingle[self.resource_class.Read, Included]
+        return JAResponseSingle[Read, Included]
 
     def get_list_response_model(self):
         Included = self.get_included_schema()
+        Read = self.resource_class.Read
 
-        return JAResponseList[self.resource_class.Read, Included]
+        return JAResponseList[Read, Included]
 
     def get_method_replacements(self):
         method_replacements = super().get_method_replacements()
@@ -83,7 +90,7 @@ class JSONAPIResourceRouter(ResourceRouter):
             inclusions = include.split(",")
             # inclusions = [inclusion.split(".") for inclusion in include.split(",")]
 
-        return self.resource_class(request=request, inclusions=inclusions)
+        return self.resource_class(inclusions=inclusions)
 
     def build_response(
         self,
