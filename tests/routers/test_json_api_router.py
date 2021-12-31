@@ -5,21 +5,23 @@ from fastapi.testclient import TestClient
 from fastapi_rest_framework import routers
 from tests.resources.sqlmodel_models import Planet
 from tests.routers import in_memory_resource
-from tests.routers.models import (
-    PlanetRead,
-    PlanetResource,
-    Star,
-    StarRead,
-    StarResource,
-)
+from tests.routers.models import GalaxyResource, PlanetResource, Star, StarResource
 
 app = FastAPI()
 
-planet = routers.JSONAPIResourceRouter(prefix="/planets", resource_class=PlanetResource)
-star = routers.JSONAPIResourceRouter(prefix="/stars", resource_class=StarResource)
+planet_router = routers.JSONAPIResourceRouter(
+    prefix="/planets", resource_class=PlanetResource
+)
+star_router = routers.JSONAPIResourceRouter(
+    prefix="/stars", resource_class=StarResource
+)
+galaxy_router = routers.JSONAPIResourceRouter(
+    prefix="/stars", resource_class=GalaxyResource
+)
 
-app.include_router(planet)
-app.include_router(star)
+app.include_router(planet_router)
+app.include_router(star_router)
+app.include_router(galaxy_router)
 
 
 client = TestClient(app)
@@ -43,7 +45,7 @@ class TestRetrieve:
         assert response.status_code == 200
         assert response.json() == {
             "data": {
-                "attributes": {"id": 1, "name": "Sirius"},
+                "attributes": {"id": 1, "name": "Sirius", "galaxy_id": None},
                 "id": "1",
                 "type": "star",
             },
@@ -64,13 +66,17 @@ class TestRetrieve:
         assert response.status_code == 200
         assert response.json() == {
             "data": {
-                "attributes": {"id": 1, "name": "Earth", "star_id": 1},
+                "attributes": {
+                    "id": 1,
+                    "name": "Earth",
+                    "star_id": 1,
+                },
                 "id": "1",
                 "type": "planet",
             },
             "included": [
                 {
-                    "attributes": {"id": 1, "name": "Sun"},
+                    "attributes": {"id": 1, "name": "Sun", "galaxy_id": None},
                     "id": "1",
                     "type": "star",
                 }
@@ -91,7 +97,7 @@ class TestList:
         assert response.json() == {
             "data": [
                 {
-                    "attributes": {"id": 1, "name": "Sirius"},
+                    "attributes": {"id": 1, "name": "Sirius", "galaxy_id": None},
                     "id": "1",
                     "type": "star",
                 }
@@ -117,19 +123,27 @@ class TestList:
         assert response.json() == {
             "data": [
                 {
-                    "attributes": {"id": 1, "name": "Earth", "star_id": 1},
+                    "attributes": {
+                        "id": 1,
+                        "name": "Earth",
+                        "star_id": 1,
+                    },
                     "id": "1",
                     "type": "planet",
                 },
                 {
-                    "attributes": {"id": 2, "name": "Hoth", "star_id": None},
+                    "attributes": {
+                        "id": 2,
+                        "name": "Hoth",
+                        "star_id": None,
+                    },
                     "id": "2",
                     "type": "planet",
                 },
             ],
             "included": [
                 {
-                    "attributes": {"id": 1, "name": "Sun"},
+                    "attributes": {"id": 1, "name": "Sun", "galaxy_id": None},
                     "id": "1",
                     "type": "star",
                 }
@@ -149,7 +163,7 @@ class TestUpdate:
         assert response.status_code == 200
         assert response.json() == {
             "data": {
-                "attributes": {"id": 1, "name": "Vega"},
+                "attributes": {"id": 1, "name": "Vega", "galaxy_id": None},
                 "id": "1",
                 "type": "star",
             },
@@ -166,7 +180,7 @@ class TestCreate:
         assert response.status_code == 200
         assert response.json() == {
             "data": {
-                "attributes": {"id": 1, "name": "Vega"},
+                "attributes": {"id": 1, "name": "Vega", "galaxy_id": None},
                 "id": "1",
                 "type": "star",
             },
@@ -187,3 +201,21 @@ class TestDelete:
         assert response.status_code == 204
 
         assert not in_memory_resource.test_db["star"]
+
+
+class TestSchema:
+    def test_include(self):
+        schema = app.openapi()
+        galaxy_included = [
+            item["$ref"]
+            for item in schema["components"]["schemas"][
+                "JAResponseSingle_GalaxyRead__Union_"
+            ]["properties"]["included"]["items"]["anyOf"]
+        ]
+
+        # Galaxy only has Star as a direct relationship, so the inclusion
+        # of a planet shows the router is walking the relationships.
+        assert galaxy_included == [
+            "#/components/schemas/JAResource_Star_",
+            "#/components/schemas/JAResource_Planet_",
+        ]

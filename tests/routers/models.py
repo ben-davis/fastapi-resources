@@ -33,12 +33,15 @@ class PlanetUpdate(SQLModel):
 class StarBase(SQLModel):
     name: str
 
+    galaxy_id: Optional[int] = Field(default=None, foreign_key="galaxy.id")
+
 
 class Star(StarBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
 
-    planets: Planet = Relationship(back_populates="star")
+    planets: list[Planet] = Relationship(back_populates="star")
+    galaxy: "Galaxy" = Relationship(back_populates="stars")
 
 
 class StarCreate(StarBase):
@@ -50,6 +53,30 @@ class StarRead(StarBase):
 
 
 class StarUpdate(SQLModel):
+    id: Optional[int] = None
+    name: Optional[str] = None
+
+
+class GalaxyBase(SQLModel):
+    name: str
+
+
+class Galaxy(GalaxyBase, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+
+    stars: list[Star] = Relationship(back_populates="galaxy")
+
+
+class GalaxyCreate(GalaxyBase):
+    pass
+
+
+class GalaxyRead(GalaxyBase):
+    id: int
+
+
+class GalaxyUpdate(SQLModel):
     id: Optional[int] = None
     name: Optional[str] = None
 
@@ -68,3 +95,11 @@ class StarResource(in_memory_resource.InMemorySQLModelResource):
     Read = StarRead
     Create = StarCreate
     Update = StarUpdate
+
+
+class GalaxyResource(in_memory_resource.InMemorySQLModelResource):
+    name = "galaxy"
+    Db = Galaxy
+    Read = GalaxyRead
+    Create = GalaxyCreate
+    Update = GalaxyUpdate

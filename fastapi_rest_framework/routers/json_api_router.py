@@ -1,16 +1,16 @@
-from typing import Any, Generic, List, Literal, TypeVar, Union
+from typing import Generic, List, Optional, TypeVar, Union
 
-from fastapi import Request, Response
+from fastapi import Query, Request, Response
 from pydantic.generics import GenericModel
-from sqlmodel import SQLModel
+from pydantic.main import BaseModel
 
-from fastapi_rest_framework.resources.base_resource import Resource
+from fastapi_rest_framework.resources.base_resource import Relationships, Resource
 from fastapi_rest_framework.resources.types import Inclusions
 from fastapi_rest_framework.routers import base_router
 
 from .base_router import ResourceRouter
 
-TRead = TypeVar("TRead", bound=SQLModel)
+TRead = TypeVar("TRead", bound=BaseModel)
 TIncluded = TypeVar("TIncluded")
 
 
@@ -34,6 +34,20 @@ class JAResponseList(GenericModel, Generic[TRead, TIncluded]):
     included: List[TIncluded]
 
 
+include_query = Query(None, regex=r"^([\w\.]+)(,[\w\.]+)*$")
+
+
+def get_schemas_from_relationships(relationships: Relationships):
+    schemas = []
+    for relationship_info in relationships.values():
+        schemas.append(relationship_info.schema_with_relationships.schema)
+        schemas += get_schemas_from_relationships(
+            relationships=relationship_info.schema_with_relationships.relationships,
+        )
+
+    return schemas
+
+
 class JSONAPIResourceRouter(ResourceRouter):
     def __init__(
         self,
@@ -45,42 +59,25 @@ class JSONAPIResourceRouter(ResourceRouter):
 
         super().__init__(resource_class=resource_class, **kwargs)
 
-    def get_included_schema(self):
+    def get_included_schema(self) -> tuple[type[BaseModel], ...]:
         relationships = self.resource_class.get_relationships()
-        if not relationships:
-            return None
+        schemas = get_schemas_from_relationships(relationships=relationships)
 
-        return Union[
-            tuple(
-                JAResource[r.schema_with_relationships.schema]
-                for r in relationships.values()
-            )
-        ]
+        return tuple(JAResource[schema] for schema in schemas)
 
     def get_read_response_model(self):
-        Included = self.get_included_schema()
+        included_schemas = self.get_included_schema()
+        Included = Union[included_schemas]
         Read = self.resource_class.Read
 
         return JAResponseSingle[Read, Included]
 
     def get_list_response_model(self):
-        Included = self.get_included_schema()
+        included_schemas = self.get_included_schema()
+        Included = Union[included_schemas]
         Read = self.resource_class.Read
 
         return JAResponseList[Read, Included]
-
-    def get_method_replacements(self):
-        method_replacements = super().get_method_replacements()
-        relationships = self.resource_class.get_relationships()
-
-        include_param = {TIncludeParam: Literal[tuple(relationships.keys())]}
-
-        return {
-            "_create": {**method_replacements["_create"], **include_param},
-            "_update": {**method_replacements["_update"], **include_param},
-            "_retrieve": include_param,
-            "_list": include_param,
-        }
 
     def get_resource(self, request: Request):
         inclusions: Inclusions = []
@@ -93,7 +90,7 @@ class JSONAPIResourceRouter(ResourceRouter):
 
     def build_response(
         self,
-        rows: Union[SQLModel, list[SQLModel]],
+        rows: Union[BaseModel, list[BaseModel]],
         resource: Resource,
     ):
         included_resources = {}
@@ -127,11 +124,15 @@ class JSONAPIResourceRouter(ResourceRouter):
         )
 
     def _retrieve(
-        self, *, id: Union[int, str], request: Request, include: TIncludeParam = None
+        self,
+        *,
+        id: Union[int, str],
+        request: Request,
+        include: Optional[str] = include_query,
     ):
         return super()._retrieve(id=id, request=request)
 
-    def _list(self, *, request: Request, include: TIncludeParam = None):
+    def _list(self, *, request: Request, include: Optional[str] = include_query):
         return super()._list(request=request)
 
     def _create(
@@ -139,7 +140,7 @@ class JSONAPIResourceRouter(ResourceRouter):
         *,
         create: base_router.TCreatePayload,
         request: Request,
-        include: TIncludeParam = None,
+        include: Optional[str] = include_query,
     ):
         return super()._create(create=create, request=request)
 
@@ -149,13 +150,11 @@ class JSONAPIResourceRouter(ResourceRouter):
         id: Union[int, str],
         update: base_router.TUpdatePayload,
         request: Request,
-        include: TIncludeParam = None,
+        include: Optional[str] = include_query,
     ):
         return super()._update(id=id, update=update, request=request)
 
-    def _delete(
-        self, *, id: Union[int, str], request: Request, include: TIncludeParam = None
-    ):
+    def _delete(self, *, id: Union[int, str], request: Request):
         super()._delete(id=id, request=request)
 
         return Response(status_code=204)
