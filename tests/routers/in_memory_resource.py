@@ -1,10 +1,11 @@
+from copy import copy
 from typing import Optional
 
 from fastapi.exceptions import HTTPException
 from sqlmodel.main import SQLModel
 
 from fastapi_rest_framework.resources import types
-from fastapi_rest_framework.resources.sqlmodel import SQLModelResource
+from fastapi_rest_framework.resources.sqlmodel import SelectedObj, SQLModelResource
 
 id_counter = 1
 test_db: dict[str, dict[int, SQLModel]] = {}
@@ -22,13 +23,36 @@ class InMemorySQLModelResource(SQLModelResource):
 
         return obj
 
-    def get_related(self, obj: SQLModel, field: str):
-        # Assumes the related object is just the field with _id suffix
-        related_id = getattr(obj, f"{field}_id")
-        if not related_id:
-            return None
+    def get_related(self, obj: SQLModel, inclusion: list[str]):
+        """Only supports to-one relationships."""
 
-        return test_db[field].get(related_id)
+        def select_inclusion(obj: SQLModel, inclusion: list[str]) -> list[SelectedObj]:
+            next_inclusion = copy(inclusion)
+            field = next_inclusion.pop(0)
+
+            # Assumes the related object is just the field with _id suffix
+            related_id = getattr(obj, f"{field}_id")
+            if not related_id:
+                return []
+
+            selected_obj = test_db[field][related_id]
+            resource = self.registry[type(selected_obj)]
+            selected_objs = [SelectedObj(obj=selected_obj, resource=resource)]
+
+            if next_inclusion:
+                selected_objs = [
+                    selected_obj,
+                    *[
+                        nested_obj
+                        for nested_obj in select_inclusion(
+                            obj=selected_obj, inclusion=next_inclusion
+                        )
+                    ],
+                ]
+
+            return selected_objs
+
+        return select_inclusion(obj=obj, inclusion=inclusion)
 
     def create(self, model: SQLModel):
         global id_counter

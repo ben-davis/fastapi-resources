@@ -145,10 +145,12 @@ app.include_router(planet)
 """
 TODO:
 x Relationships and automatically supported and documented `includes` with efficient prefetches.
-- Nested relationships
+x Nested relationships
 - Post create & update hooks.
     - Ensure it can support things like easily saving the user from the request as an attr on a model
 x An equivalent of get_queryset so users can do row-level permissions.
 - How to support actions?
-- Can JSON:API be an optional thing?
+x Can JSON:API be an optional thing?
+- Filtering/sorting on lists
+- All other JSON:API compliance
 """

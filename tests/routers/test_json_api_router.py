@@ -3,8 +3,15 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from fastapi_rest_framework import routers
+from tests.resources.sqlmodel_models import Planet
 from tests.routers import in_memory_resource
-from tests.routers.models import PlanetRead, PlanetResource, StarRead, StarResource
+from tests.routers.models import (
+    PlanetRead,
+    PlanetResource,
+    Star,
+    StarRead,
+    StarResource,
+)
 
 app = FastAPI()
 
@@ -26,7 +33,8 @@ def reset_db():
 
 class TestRetrieve:
     def test_retrieve(self):
-        star = StarRead(name="Sirius", id=1)
+        star = Star(name="Sirius")
+        star.id = 1
 
         in_memory_resource.test_db["star"][star.id] = star
 
@@ -43,8 +51,10 @@ class TestRetrieve:
         }
 
     def test_include(self):
-        star = StarRead(name="Sun", id=1)
-        planet = PlanetRead(name="Earth", id=1, star_id=1)
+        star = Star(name="Sun")
+        star.id = 1
+        planet = Planet(name="Earth", star_id=1)
+        planet.id = 1
 
         in_memory_resource.test_db["star"][star.id] = star
         in_memory_resource.test_db["planet"][planet.id] = planet
@@ -70,7 +80,8 @@ class TestRetrieve:
 
 class TestList:
     def test_list(self):
-        star = StarRead(name="Sirius", id=1)
+        star = Star(name="Sirius")
+        star.id = 1
 
         in_memory_resource.test_db["star"][star.id] = star
 
@@ -89,9 +100,12 @@ class TestList:
         }
 
     def test_include(self):
-        star = StarRead(name="Sun", id=1)
-        planet = PlanetRead(name="Earth", id=1, star_id=1)
-        hoth = PlanetRead(name="Hoth", id=2)
+        star = Star(name="Sun")
+        star.id = 1
+        planet = Planet(name="Earth", star_id=1)
+        planet.id = 1
+        hoth = Planet(name="Hoth")
+        hoth.id = 2
 
         in_memory_resource.test_db["star"][star.id] = star
         in_memory_resource.test_db["planet"][planet.id] = planet
@@ -125,7 +139,8 @@ class TestList:
 
 class TestUpdate:
     def test_update(self):
-        star = StarRead(name="Sirius", id=1)
+        star = Star(name="Sirius")
+        star.id = 1
 
         in_memory_resource.test_db["star"][star.id] = star
 
@@ -163,7 +178,8 @@ class TestCreate:
 
 class TestDelete:
     def test_delete(self):
-        star = StarRead(name="Sirius", id=1)
+        star = Star(name="Sirius")
+        star.id = 1
 
         in_memory_resource.test_db["star"][star.id] = star
 

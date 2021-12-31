@@ -4,7 +4,7 @@ from typing import Optional, Type
 
 from pydantic.main import BaseModel
 
-from .types import Inclusions, RelationshipProtocol
+from .types import Inclusions, ResourceProtocol
 
 
 @dataclass
@@ -21,6 +21,12 @@ class SQLModelRelationshipInfo:
 
 
 Relationships = dict[str, SQLModelRelationshipInfo]
+
+
+@dataclass
+class SelectedObj:
+    obj: BaseModel
+    resource: Type["Resource"]
 
 
 def _validate(_relationships: Relationships, _inclusion: list[str]):
@@ -40,7 +46,7 @@ def _validate(_relationships: Relationships, _inclusion: list[str]):
         )
 
 
-class Resource(RelationshipProtocol):
+class Resource(ResourceProtocol):
     def __init__(self, inclusions: Optional[Inclusions] = None, *args, **kwargs):
         if inclusions:
             self.validate_inclusions(inclusions=inclusions)
@@ -58,5 +64,5 @@ class Resource(RelationshipProtocol):
     def get_relationships(cls) -> Relationships:
         return {}
 
-    def get_related(self, obj: BaseModel, inclusion: list[str]) -> list[BaseModel]:
+    def get_related(self, obj: BaseModel, inclusion: list[str]) -> list[SelectedObj]:
         raise NotImplementedError()

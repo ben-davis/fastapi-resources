@@ -87,8 +87,7 @@ class JSONAPIResourceRouter(ResourceRouter):
         include = request.query_params.get("include")
 
         if include:
-            inclusions = include.split(",")
-            # inclusions = [inclusion.split(".") for inclusion in include.split(",")]
+            inclusions = [inclusion.split(".") for inclusion in include.split(",")]
 
         return self.resource_class(inclusions=inclusions)
 
@@ -101,26 +100,19 @@ class JSONAPIResourceRouter(ResourceRouter):
 
         many = isinstance(rows, list)
         rows = rows if isinstance(rows, list) else [rows]
-        relationships = resource.get_relationships()
 
         for row in rows:
             for inclusion in resource.inclusions:
-                included_objs = resource.get_related(obj=row, field=inclusion)
-                if not included_objs:
-                    continue
+                selected_objs = resource.get_related(obj=row, inclusion=inclusion)
 
-                included_objs = (
-                    [included_objs]
-                    if not isinstance(included_objs, list)
-                    else included_objs
-                )
+                for selected_obj in selected_objs:
+                    obj = selected_obj.obj
+                    related_resource = selected_obj.resource
 
-                for included_obj in included_objs:
-                    schema = relationships[inclusion].schema
-                    included_resources[included_obj.id] = JAResource(
-                        id=included_obj.id,
-                        type=inclusion,
-                        attributes=schema.from_orm(included_obj),
+                    included_resources[obj.id] = JAResource(
+                        id=selected_obj.obj.id,
+                        type=related_resource.name,
+                        attributes=resource.Read.from_orm(obj),
                     )
 
         data = [
@@ -128,7 +120,6 @@ class JSONAPIResourceRouter(ResourceRouter):
         ]
         data = data if many else data[0]
         ResponseSchema = JAResponseList if many else JAResponseSingle
-        print(data)
 
         return ResponseSchema(
             data=data,
