@@ -112,6 +112,6 @@ class GalaxyResource(SQLModelResource[Galaxy]):
     engine = engine
     name = "galaxy"
     Db = Galaxy
-    Read = GalaxyCreate
+    Read = GalaxyRead
     Create = GalaxyCreate
     Update = GalaxyUpdate

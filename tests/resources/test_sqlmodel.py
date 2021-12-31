@@ -1,23 +1,16 @@
-import pprint
-from typing import Optional
-
 import pytest
-from fastapi import Request
 from sqlalchemy.orm.session import close_all_sessions
 from sqlmodel import Session
 
-from fastapi_rest_framework.resources.sqlmodel import (
-    Relationships,
-    SQLModelRelationshipInfo,
-    SQLResourceProtocol,
-)
 from tests.resources.sqlmodel_models import (
     Galaxy,
+    GalaxyRead,
     GalaxyResource,
     Planet,
+    PlanetRead,
     PlanetResource,
     Star,
-    StarCreate,
+    StarRead,
     StarResource,
     engine,
     registry,
@@ -134,6 +127,51 @@ class TestRelationships:
             is favorite_galaxy_to_stars.schema_with_relationships
         )
 
+    def test_get_related(self, session: Session):
+        resource = GalaxyResource(
+            session=session,
+            inclusions=[],
+        )
+
+        galaxy = Galaxy(name="Milky Way")
+        session.add(galaxy)
+        session.commit()
+        session.refresh(galaxy)
+
+        star = Star(name="Sun", galaxy_id=galaxy.id)
+        session.add(star)
+        session.commit()
+        session.refresh(star)
+
+        andromeda = Galaxy(name="Andromeda")
+        session.add(andromeda)
+        session.commit()
+        session.refresh(andromeda)
+
+        andromedae = Star(name="Andromedae", galaxy_id=galaxy.id)
+        session.add(andromedae)
+        session.commit()
+        session.refresh(andromedae)
+
+        planet = Planet(name="Earth", star_id=star.id, favorite_galaxy_id=andromeda.id)
+        session.add(planet)
+        session.commit()
+        session.refresh(planet)
+
+        related_objects = resource.get_related(
+            obj=galaxy,
+            inclusion=["stars", "planets", "favorite_galaxy", "stars"],
+        )
+
+        assert related_objects[0].obj == star
+        assert related_objects[0].schema == StarRead
+        assert related_objects[1].obj == andromedae
+        assert related_objects[1].schema == StarRead
+        assert related_objects[2].obj == planet
+        assert related_objects[2].schema == PlanetRead
+        assert related_objects[3].obj == andromeda
+        assert related_objects[3].schema == GalaxyRead
+
 
 class TestRetrieve:
     def test_retrieve(self, session: Session):
@@ -149,7 +187,7 @@ class TestRetrieve:
 
         assert star_retrieve.name == "Sirius"
 
-    def test_include(self, session: Session):
+    def test_include_preselects(self, session: Session):
         star = Star(name="Sun")
         session.add(star)
         session.commit()
@@ -173,9 +211,6 @@ class TestRetrieve:
 
         with assert_num_queries(engine=engine, num=1):
             planet_retrieve = resource.retrieve(id=planet_id)
-            related = resource.get_related(planet_retrieve, "star")
+            related = resource.get_related(planet_retrieve, ["star"])
 
-        assert related.name == "Sun"
-
-
-# star = resource.create(model=StarCreate(name="Series"))
+        assert related[0].obj.name == "Sun"

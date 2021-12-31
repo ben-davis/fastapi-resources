@@ -58,5 +58,5 @@ class Resource(RelationshipProtocol):
     def get_relationships(cls) -> Relationships:
         return {}
 
-    def get_related(self, obj: BaseModel, field: str):
+    def get_related(self, obj: BaseModel, inclusion: list[str]) -> list[BaseModel]:
         raise NotImplementedError()

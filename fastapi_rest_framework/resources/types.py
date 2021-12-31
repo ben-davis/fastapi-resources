@@ -36,5 +36,5 @@ class ResourceProtocol(Protocol):
     ) -> dict[str, RelationshipProtocol]:
         ...
 
-    def get_related(self, obj: BaseModel, field: str) -> BaseModel | List[BaseModel]:
+    def get_related(self, obj: BaseModel, inclusion: List[str]) -> List[BaseModel]:
         ...

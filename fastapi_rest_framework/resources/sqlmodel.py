@@ -9,7 +9,7 @@ from sqlalchemy.engine.base import Engine
 from sqlalchemy.orm import exc as sa_exceptions
 from sqlalchemy.orm import joinedload
 from sqlmodel import Session, SQLModel, select
-from sqlmodel.sql.expression import SelectOfScalar
+from sqlmodel.sql.expression import Select, SelectOfScalar
 
 from fastapi_rest_framework.resources import base_resource, types
 
@@ -30,6 +30,12 @@ class SQLModelRelationshipInfo:
 Relationships = dict[str, SQLModelRelationshipInfo]
 
 
+@dataclass
+class SelectedObj:
+    obj: SQLModel
+    schema: Type[SQLModel]
+
+
 TDb = TypeVar("TDb", bound=SQLModel)
 
 
@@ -48,7 +54,7 @@ class SQLResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
     ) -> dict[str, SQLModelRelationshipInfo]:
         ...
 
-    def get_related(self, obj: SQLModel, field: str) -> SQLModel | list[SQLModel]:
+    def get_related(self, obj: SQLModel, inclusion: list[str]) -> list[SQLModel]:
         ...
 
     def get_object(self, id: int | str) -> SQLModel:
@@ -152,6 +158,14 @@ def get_relationships_from_schema(
 
 
 class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[TDb]):
+    registry: dict[Type[SQLModel], Type["BaseSQLResource"]] = {}
+
+    def __init_subclass__(cls) -> None:
+        if Db := getattr(cls, "Db", None):
+            BaseSQLResource.registry[Db] = cls
+
+        return super().__init_subclass__()
+
     def __init__(
         self,
         session: Session,
@@ -161,22 +175,20 @@ class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[
     ):
         self.session = session
 
+        # TODO: Save the relationships on the instance at instantiation for caching
+
         super().__init__(inclusions=inclusions)
 
     @classmethod
-    def get_relationships(cls) -> dict[str, SQLModelRelationshipInfo]:
+    def get_relationships(cls) -> Relationships:
         """Builds the relationship graph for the current resource.
+
+        TODO: Have the relationship point to the resource, rather than the schema. Use
+            the registry to lookup the related resource.
 
         Used to:
           - Validate a given inclusion resolves to a relationship (done in the base class)
           - To retrieve all the objects along an inclusion with their schemas
-
-        Okay so:
-        - we want to return a list of all valid relationships, regardles
-        of depth.
-        - It needs to terminate before any cycles
-        - each step of the relationship needs to have an associated schema
-        - It should be done via a metaclass so it's done during class creation
         """
         return get_relationships_from_schema(schema=cls.Db)
 
@@ -205,21 +217,49 @@ class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[
     def get_related(
         self,
         obj: SQLModel,
-        inclusions: types.Inclusions,
-    ):
-        """Gets a related object based on an Inclusions path.
+        inclusion: list[str],
+    ) -> list[SelectedObj]:
+        """Gets related objects based on an Inclusions path."""
 
-        FOR BEN: I think this is the only relationship function that should be public. The others,
-        liek get_relationships, is really just an implementation detail. So this should also
-        validate.
+        def select_objs(
+            _obj, _inclusion: list[str], _relationships: Relationships
+        ) -> list[SelectedObj]:
+            next_inclusion = copy.copy(_inclusion)
+            field = next_inclusion.pop(0)
+            relationship_info = _relationships[field]
+            schema = relationship_info.schema_with_relationships.schema
 
-        An unanswered question for me is whether inclusions should be given at instantiation
-        time. I suppose it can be because it's tied to the request, but it feels to specific.
+            selected_objs = getattr(_obj, field)
+            selected_objs = (
+                selected_objs if isinstance(selected_objs, list) else [selected_objs]
+            )
 
-                If the path does not resolve to a valid relationship, a validation error is
-                raised.
-        """
-        return getattr(obj, field)
+            selected_objs = [
+                SelectedObj(
+                    obj=selected_obj, schema=SQLModelResource.registry[schema].Read
+                )
+                for selected_obj in selected_objs
+            ]
+
+            if next_inclusion:
+                selected_objs = [
+                    *selected_objs,
+                    *[
+                        nested_obj
+                        for selected_obj in selected_objs
+                        for nested_obj in select_objs(
+                            _obj=selected_obj.obj,
+                            _inclusion=next_inclusion,
+                            _relationships=relationship_info.schema_with_relationships.relationships,
+                        )
+                    ],
+                ]
+
+            return selected_objs
+
+        return select_objs(
+            _obj=obj, _inclusion=inclusion, _relationships=self.get_relationships()
+        )
 
 
 class CreateResourceMixin:
