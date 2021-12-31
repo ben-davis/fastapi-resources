@@ -1,4 +1,4 @@
-from typing import Generic, List, Optional, TypeVar, Union
+from typing import Generic, List, Literal, Optional, TypeVar, Union
 
 from fastapi import Query, Request, Response
 from pydantic.generics import GenericModel
@@ -11,6 +11,7 @@ from fastapi_rest_framework.routers import base_router
 from .base_router import ResourceRouter
 
 TRead = TypeVar("TRead", bound=BaseModel)
+TName = TypeVar("TName", bound=str)
 TIncluded = TypeVar("TIncluded")
 
 
@@ -18,19 +19,19 @@ class TIncludeParam(str):
     pass
 
 
-class JAResource(GenericModel, Generic[TRead]):
+class JAResource(GenericModel, Generic[TRead, TName]):
     id: str
-    type: str
+    type: TName
     attributes: TRead
 
 
-class JAResponseSingle(GenericModel, Generic[TRead, TIncluded]):
-    data: JAResource[TRead]
+class JAResponseSingle(GenericModel, Generic[TRead, TName, TIncluded]):
+    data: JAResource[TRead, TName]
     included: List[TIncluded]
 
 
-class JAResponseList(GenericModel, Generic[TRead, TIncluded]):
-    data: List[JAResource[TRead]]
+class JAResponseList(GenericModel, Generic[TRead, TName, TIncluded]):
+    data: List[JAResource[TRead, TName]]
     included: List[TIncluded]
 
 
@@ -63,21 +64,29 @@ class JSONAPIResourceRouter(ResourceRouter):
         relationships = self.resource_class.get_relationships()
         schemas = get_schemas_from_relationships(relationships=relationships)
 
-        return tuple(JAResource[schema] for schema in schemas)
+        return tuple(
+            JAResource[
+                schema,
+                Literal[(self.resource_class.registry[schema].name,)],
+            ]
+            for schema in schemas
+        )
 
     def get_read_response_model(self):
         included_schemas = self.get_included_schema()
         Included = Union[included_schemas]
         Read = self.resource_class.Read
+        Name = Literal[(self.resource_class.name,)]
 
-        return JAResponseSingle[Read, Included]
+        return JAResponseSingle[Read, Name, Included]
 
     def get_list_response_model(self):
         included_schemas = self.get_included_schema()
         Included = Union[included_schemas]
         Read = self.resource_class.Read
+        Name = Literal[(self.resource_class.name,)]
 
-        return JAResponseList[Read, Included]
+        return JAResponseList[Read, Name, Included]
 
     def get_resource(self, request: Request):
         inclusions: Inclusions = []

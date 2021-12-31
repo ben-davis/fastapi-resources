@@ -209,13 +209,13 @@ class TestSchema:
         galaxy_included = [
             item["$ref"]
             for item in schema["components"]["schemas"][
-                "JAResponseSingle_GalaxyRead__Union_"
+                "JAResponseSingle_GalaxyRead__Literal__Union_"
             ]["properties"]["included"]["items"]["anyOf"]
         ]
 
         # Galaxy only has Star as a direct relationship, so the inclusion
         # of a planet shows the router is walking the relationships.
         assert galaxy_included == [
-            "#/components/schemas/JAResource_Star_",
-            "#/components/schemas/JAResource_Planet_",
+            "#/components/schemas/JAResource_Star__Literal_",
+            "#/components/schemas/JAResource_Planet__Literal_",
         ]
