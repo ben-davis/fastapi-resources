@@ -50,6 +50,25 @@ def session():
 
 
 class TestRelationships:
+    def test_inclusion_validation_success(self, session: Session):
+        # Validation happens on instantiation
+        GalaxyResource(
+            session=session,
+            inclusions=[
+                ["stars", "planets", "favorite_galaxy", "stars"],
+                ["favorite_planets", "star"],
+            ],
+        )
+
+    def test_inclusion_validation_invalid(self, session: Session):
+        with pytest.raises(AssertionError):
+            GalaxyResource(
+                session=session,
+                inclusions=[
+                    ["stars", "yolo", "favorite_galaxy", "stars"],
+                ],
+            )
+
     def test_is_recursive_graph(self, session: Session):
         resource = GalaxyResource(session=session)
         relationships = resource.get_relationships()

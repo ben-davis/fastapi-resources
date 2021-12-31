@@ -105,10 +105,10 @@ def get_relationships_from_schema(
     for field in relationship_fields:
         annotated_type = annotations[field]
         related_schema = get_related_schema(annotated_type)
-
-        new_parent_key = f"{schema}.{field}"
-
         many = typing.get_origin(annotated_type) == list
+
+        # Used to uniquely identify the related schema relative to a parent
+        new_parent_key = f"{schema}.{field}"
 
         # If this branch already contains the schema with the same parent,
         # we can reuse the relationship to avoid a cycle.
@@ -151,9 +151,6 @@ def get_relationships_from_schema(
     return relationships
 
 
-# Galaxy - > stars -> planets -> star -> LOOP
-
-
 class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[TDb]):
     def __init__(
         self,
@@ -168,7 +165,12 @@ class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[
 
     @classmethod
     def get_relationships(cls) -> dict[str, SQLModelRelationshipInfo]:
-        """
+        """Builds the relationship graph for the current resource.
+
+        Used to:
+          - Validate a given inclusion resolves to a relationship (done in the base class)
+          - To retrieve all the objects along an inclusion with their schemas
+
         Okay so:
         - we want to return a list of all valid relationships, regardles
         of depth.
@@ -203,8 +205,20 @@ class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[
     def get_related(
         self,
         obj: SQLModel,
-        field: str,
+        inclusions: types.Inclusions,
     ):
+        """Gets a related object based on an Inclusions path.
+
+        FOR BEN: I think this is the only relationship function that should be public. The others,
+        liek get_relationships, is really just an implementation detail. So this should also
+        validate.
+
+        An unanswered question for me is whether inclusions should be given at instantiation
+        time. I suppose it can be because it's tied to the request, but it feels to specific.
+
+                If the path does not resolve to a valid relationship, a validation error is
+                raised.
+        """
         return getattr(obj, field)
 
 
