@@ -164,13 +164,13 @@ class TestRelationships:
         )
 
         assert related_objects[0].obj == star
-        assert related_objects[0].schema == StarRead
+        assert related_objects[0].resource == StarResource
         assert related_objects[1].obj == andromedae
-        assert related_objects[1].schema == StarRead
+        assert related_objects[1].resource == StarResource
         assert related_objects[2].obj == planet
-        assert related_objects[2].schema == PlanetRead
+        assert related_objects[2].resource == PlanetResource
         assert related_objects[3].obj == andromeda
-        assert related_objects[3].schema == GalaxyRead
+        assert related_objects[3].resource == GalaxyResource
 
 
 class TestRetrieve:

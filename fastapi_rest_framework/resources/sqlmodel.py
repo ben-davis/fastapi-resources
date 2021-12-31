@@ -33,7 +33,7 @@ Relationships = dict[str, SQLModelRelationshipInfo]
 @dataclass
 class SelectedObj:
     obj: SQLModel
-    schema: Type[SQLModel]
+    resource: "BaseSQLResource"
 
 
 TDb = TypeVar("TDb", bound=SQLModel)
@@ -158,7 +158,7 @@ def get_relationships_from_schema(
 
 
 class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[TDb]):
-    registry: dict[Type[SQLModel], Type["BaseSQLResource"]] = {}
+    registry: dict[Type[SQLModel], "BaseSQLResource"] = {}
 
     def __init_subclass__(cls) -> None:
         if Db := getattr(cls, "Db", None):
@@ -236,7 +236,7 @@ class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[
 
             selected_objs = [
                 SelectedObj(
-                    obj=selected_obj, schema=SQLModelResource.registry[schema].Read
+                    obj=selected_obj, resource=SQLModelResource.registry[schema]
                 )
                 for selected_obj in selected_objs
             ]
