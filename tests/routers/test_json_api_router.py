@@ -35,6 +35,7 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def reset_db():
+    in_memory_resource.id_counter = 1
     in_memory_resource.test_db["galaxy"] = {}
     in_memory_resource.test_db["star"] = {}
     in_memory_resource.test_db["planet"] = {}

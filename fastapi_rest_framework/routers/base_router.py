@@ -1,7 +1,7 @@
 import inspect
 from typing import List, Union
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
 from fastapi_rest_framework.resources.base_resource import Resource
@@ -165,7 +165,9 @@ class ResourceRouter(APIRouter):
         if not resource.delete:
             raise NotImplementedError("Resource.delete not implemented")
 
-        return resource.delete(id=id)
+        resource.delete(id=id)
+
+        return Response(status_code=204)
 
 
 """

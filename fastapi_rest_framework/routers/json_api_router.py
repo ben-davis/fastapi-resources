@@ -173,6 +173,4 @@ class JSONAPIResourceRouter(ResourceRouter):
         return super()._update(id=id, update=update, request=request)
 
     def _delete(self, *, id: Union[int, str], request: Request):
-        super()._delete(id=id, request=request)
-
-        return Response(status_code=204)
+        return super()._delete(id=id, request=request)

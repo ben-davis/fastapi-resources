@@ -1,0 +1,108 @@
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from fastapi_rest_framework import routers
+from tests.resources.sqlmodel_models import Planet
+from tests.routers import in_memory_resource
+from tests.routers.models import (
+    Galaxy,
+    GalaxyResource,
+    PlanetResource,
+    Star,
+    StarResource,
+)
+
+app = FastAPI()
+
+planet_router = routers.ResourceRouter(prefix="/planets", resource_class=PlanetResource)
+star_router = routers.ResourceRouter(prefix="/stars", resource_class=StarResource)
+galaxy_router = routers.ResourceRouter(prefix="/stars", resource_class=GalaxyResource)
+
+app.include_router(planet_router)
+app.include_router(star_router)
+app.include_router(galaxy_router)
+
+
+client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def reset_db():
+    in_memory_resource.test_db["galaxy"] = {}
+    in_memory_resource.test_db["star"] = {}
+    in_memory_resource.test_db["planet"] = {}
+
+
+class TestRetrieve:
+    def test_retrieve(self):
+        star = Star(name="Sirius")
+        star.id = 1
+
+        in_memory_resource.test_db["star"][star.id] = star
+
+        response = client.get(f"/stars/{star.id}")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "id": 1,
+            "name": "Sirius",
+            "galaxy_id": None,
+        }
+
+
+class TestList:
+    def test_list(self):
+        star = Star(name="Sirius")
+        star.id = 1
+
+        in_memory_resource.test_db["star"][star.id] = star
+
+        response = client.get(f"/stars/")
+
+        assert response.status_code == 200
+        assert response.json() == [
+            {"id": 1, "name": "Sirius", "galaxy_id": None},
+        ]
+
+
+class TestUpdate:
+    def test_update(self):
+        star = Star(name="Sirius")
+        star.id = 1
+
+        in_memory_resource.test_db["star"][star.id] = star
+
+        response = client.patch(f"/stars/{star.id}", json={"name": "Vega"})
+
+        assert response.status_code == 200
+        assert response.json() == {"id": 1, "name": "Vega", "galaxy_id": None}
+
+        assert in_memory_resource.test_db["star"][1].name == "Vega"
+
+
+class TestCreate:
+    def test_create(self):
+        response = client.post(f"/stars/", json={"name": "Vega"})
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "id": 1,
+            "name": "Vega",
+            "galaxy_id": None,
+        }
+
+        assert in_memory_resource.test_db["star"][1]
+
+
+class TestDelete:
+    def test_delete(self):
+        star = Star(name="Sirius")
+        star.id = 1
+
+        in_memory_resource.test_db["star"][star.id] = star
+
+        response = client.delete(f"/stars/{star.id}")
+        assert response.status_code == 204
+
+        assert not in_memory_resource.test_db["star"]
