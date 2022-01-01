@@ -13,15 +13,23 @@ engine = create_engine(sqlite_url, echo=True)
 app = FastAPI()
 
 
+@app.on_event("startup")
+def on_startup():
+    SQLModel.metadata.create_all(engine)
+
+
 class PlanetBase(SQLModel):
-    star: str
-    location: str
+    name: str
+
+    star_id: Optional[int] = Field(default=None, foreign_key="star.id")
+    favorite_galaxy_id: Optional[int] = Field(default=None, foreign_key="galaxy.id")
 
 
 class Planet(PlanetBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
-    teams: List["Team"] = Relationship(back_populates="planet")
+    star: "Star" = Relationship(back_populates="planets")
+    favorite_galaxy: "Galaxy" = Relationship(back_populates="favorite_planets")
 
 
 class PlanetCreate(PlanetBase):
@@ -29,116 +37,106 @@ class PlanetCreate(PlanetBase):
 
 
 class PlanetRead(PlanetBase):
-    id: str
+    id: int
 
 
 class PlanetUpdate(SQLModel):
-    id: Optional[str] = None
-    star: Optional[str] = None
-    location: Optional[str] = None
+    id: Optional[int] = None
+    name: Optional[str] = None
+    favorite_galaxy_id: Optional[str] = None
 
 
-class TeamBase(SQLModel):
+class StarBase(SQLModel):
     name: str
-    headquarters: str
 
-    planet_id: Optional[int] = Field(default=None, foreign_key="planet.id")
+    galaxy_id: Optional[int] = Field(default=None, foreign_key="galaxy.id")
 
 
-class Team(TeamBase, table=True):
+class Star(StarBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
 
-    heroes: List["Hero"] = Relationship(back_populates="team")
-    planet: Optional[Planet] = Relationship(back_populates="teams")
+    planets: List[Planet] = Relationship(back_populates="star")
+    galaxy: "Galaxy" = Relationship(back_populates="stars")
 
 
-class TeamCreate(TeamBase):
+class StarCreate(StarBase):
     pass
 
 
-class TeamRead(TeamBase):
-    id: str
+class StarRead(StarBase):
+    id: int
 
 
-class TeamUpdate(SQLModel):
-    id: Optional[str] = None
+class StarUpdate(SQLModel):
+    id: Optional[int] = None
     name: Optional[str] = None
-    headquarters: Optional[str] = None
 
 
-class HeroBase(SQLModel):
+class GalaxyBase(SQLModel):
     name: str
-    secret_name: str
-    age: Optional[int] = None
-
-    team_id: Optional[int] = Field(default=None, foreign_key="team.id")
 
 
-class Hero(HeroBase, table=True):
+class Galaxy(GalaxyBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
 
-    team: Optional[Team] = Relationship(back_populates="heroes")
+    stars: List[Star] = Relationship(back_populates="galaxy")
+    favorite_planets: List[Planet] = Relationship(back_populates="favorite_galaxy")
 
 
-class HeroCreate(HeroBase):
+class GalaxyCreate(GalaxyBase):
     pass
 
 
-class HeroRead(HeroBase):
-    id: str
+class GalaxyRead(GalaxyBase):
+    id: int
 
 
-class HeroUpdate(SQLModel):
+class GalaxyUpdate(SQLModel):
+    id: Optional[int] = None
     name: Optional[str] = None
-    secret_name: Optional[str] = None
-    age: Optional[int] = None
-    team_id: Optional[int] = None
 
 
-@app.on_event("startup")
-def on_startup():
-    SQLModel.metadata.create_all(engine)
-
-
-class TeamResource(resources.SQLModelResource):
-    name = "team"
+class PlanetResource(resources.SQLModelResource[Planet]):
     engine = engine
-    Db = Team
-    Read = TeamRead
-    Create = TeamCreate
-    Update = TeamUpdate
-
-
-class HeroResource(resources.SQLModelResource):
-    name = "hero"
-    engine = engine
-    Db = Hero
-    Read = HeroRead
-    Create = HeroCreate
-    Update = HeroUpdate
-
-
-class PlanetResource(resources.SQLModelResource):
     name = "planet"
-    engine = engine
     Db = Planet
     Read = PlanetRead
     Create = PlanetCreate
     Update = PlanetUpdate
 
 
-team = routers.JSONAPIResourceRouter(
-    prefix="/teams", resource_class=TeamResource, tags=["Teams"]
+class StarResource(resources.SQLModelResource[Star]):
+    engine = engine
+    name = "star"
+    Db = Star
+    Read = StarRead
+    Create = StarCreate
+    Update = StarUpdate
+
+
+class GalaxyResource(resources.SQLModelResource[Galaxy]):
+    engine = engine
+    name = "galaxy"
+    Db = Galaxy
+    Read = GalaxyRead
+    Create = GalaxyCreate
+    Update = GalaxyUpdate
+
+
+galaxy = routers.JSONAPIResourceRouter(
+    prefix="/galaxies", resource_class=GalaxyResource, tags=["Galaxies"]
 )
-hero = routers.JSONAPIResourceRouter(
-    prefix="/heroes", resource_class=HeroResource, tags=["Heroes"]
+star = routers.JSONAPIResourceRouter(
+    prefix="/stars", resource_class=StarResource, tags=["Stars"]
 )
 planet = routers.JSONAPIResourceRouter(
     prefix="/planets", resource_class=PlanetResource, tags=["Planets"]
 )
 
-app.include_router(hero)
-app.include_router(team)
+app.include_router(galaxy)
+app.include_router(star)
 app.include_router(planet)
 
 

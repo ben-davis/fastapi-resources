@@ -188,7 +188,12 @@ class TestRetrieve:
         assert star_retrieve.name == "Sirius"
 
     def test_include_preselects(self, session: Session):
-        star = Star(name="Sun")
+        galaxy = Galaxy(name="Milky Way")
+        session.add(galaxy)
+        session.commit()
+        session.refresh(galaxy)
+
+        star = Star(name="Sun", galaxy_id=galaxy.id)
         session.add(star)
         session.commit()
         session.refresh(star)
@@ -200,17 +205,18 @@ class TestRetrieve:
 
         assert star.id
         assert planet.id
+        assert galaxy.id
 
         # We need to save this otherwise planet.id will cause a new query to be emitted.
-        planet_id = planet.id
+        galaxy_id = galaxy.id
 
-        resource = PlanetResource(session=session, inclusions=[["star"]])
+        resource = GalaxyResource(session=session, inclusions=[["stars", "planets"]])
 
         # Expire so we know we're starting from fresh
         session.expire_all()
 
         with assert_num_queries(engine=engine, num=1):
-            planet_retrieve = resource.retrieve(id=planet_id)
-            related = resource.get_related(planet_retrieve, ["star"])
+            galaxy_retrieve = resource.retrieve(id=galaxy_id)
+            related = resource.get_related(galaxy_retrieve, ["stars", "planets"])
 
         assert related[0].obj.name == "Sun"

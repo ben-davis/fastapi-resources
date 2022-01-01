@@ -27,23 +27,32 @@ class JAResource(GenericModel, Generic[TRead, TName]):
 
 class JAResponseSingle(GenericModel, Generic[TRead, TName, TIncluded]):
     data: JAResource[TRead, TName]
-    included: List[TIncluded]
+    included: TIncluded
 
 
 class JAResponseList(GenericModel, Generic[TRead, TName, TIncluded]):
     data: List[JAResource[TRead, TName]]
-    included: List[TIncluded]
+    included: TIncluded
 
 
 include_query = Query(None, regex=r"^([\w\.]+)(,[\w\.]+)*$")
 
 
-def get_schemas_from_relationships(relationships: Relationships):
+def get_schemas_from_relationships(
+    relationships: Relationships, visited: set[type[BaseModel]] = None
+):
     schemas = []
+    visited = visited or set()
     for relationship_info in relationships.values():
-        schemas.append(relationship_info.schema_with_relationships.schema)
+        schema = relationship_info.schema_with_relationships.schema
+        if schema in visited:
+            continue
+
+        visited.add(schema)
+        schemas.append(schema)
         schemas += get_schemas_from_relationships(
             relationships=relationship_info.schema_with_relationships.relationships,
+            visited=visited,
         )
 
     return schemas
@@ -74,7 +83,7 @@ class JSONAPIResourceRouter(ResourceRouter):
 
     def get_read_response_model(self):
         included_schemas = self.get_included_schema()
-        Included = Union[included_schemas]
+        Included = List[Union[included_schemas]] if included_schemas else list
         Read = self.resource_class.Read
         Name = Literal[(self.resource_class.name,)]
 
@@ -82,7 +91,7 @@ class JSONAPIResourceRouter(ResourceRouter):
 
     def get_list_response_model(self):
         included_schemas = self.get_included_schema()
-        Included = Union[included_schemas]
+        Included = List[Union[included_schemas]] if included_schemas else list
         Read = self.resource_class.Read
         Name = Literal[(self.resource_class.name,)]
 
@@ -115,10 +124,10 @@ class JSONAPIResourceRouter(ResourceRouter):
                     obj = selected_obj.obj
                     related_resource = selected_obj.resource
 
-                    included_resources[obj.id] = JAResource(
-                        id=selected_obj.obj.id,
+                    included_resources[(related_resource.name, obj.id)] = JAResource(
+                        id=obj.id,
                         type=related_resource.name,
-                        attributes=resource.Read.from_orm(obj),
+                        attributes=related_resource.Read.from_orm(obj),
                     )
 
         data = [

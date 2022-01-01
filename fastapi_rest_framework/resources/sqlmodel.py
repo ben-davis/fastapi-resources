@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Generic, Optional, Protocol, Type, TypeVar
 
 from fastapi import HTTPException
-from sqlalchemy.engine.base import Engine
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import exc as sa_exceptions
 from sqlalchemy.orm import joinedload
 from sqlmodel import Session, SQLModel, select
-from sqlmodel.sql.expression import Select, SelectOfScalar
+from sqlmodel.sql.expression import SelectOfScalar
 
 from fastapi_rest_framework.resources import base_resource, types
 
@@ -45,6 +45,8 @@ class SQLResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
 
     Create: ClassVar[Optional[Type[SQLModel]]]
     Update: ClassVar[Optional[Type[SQLModel]]]
+
+    engine: ClassVar[Optional[Engine]] = None
 
     session: Session
 
@@ -158,7 +160,7 @@ def get_relationships_from_schema(
 
 
 class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[TDb]):
-    registry: dict[Type[SQLModel], "BaseSQLResource"] = {}
+    registry: dict[Type[SQLModel], type["BaseSQLResource"]] = {}
 
     def __init_subclass__(cls) -> None:
         if Db := getattr(cls, "Db", None):
@@ -168,12 +170,16 @@ class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[
 
     def __init__(
         self,
-        session: Session,
+        session: Session = None,
         inclusions: Optional[types.Inclusions] = None,
         *args,
         **kwargs,
     ):
-        self.session = session
+        if session:
+            self.session = session
+        else:
+            assert self.engine, "A session or an engine must be given."
+            self.session = Session(self.engine)
 
         # TODO: Save the relationships on the instance at instantiation for caching
 
@@ -198,8 +204,21 @@ class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[
 
         # Build the query options based on the include
         for inclusion in inclusions:
-            attr = operator.attrgetter(".".join(inclusion))(self.Db)
-            options.append(joinedload(attr))
+            zipped_inclusion = self.zipped_inclusions_with_resource(
+                inclusion=inclusion,
+            )
+            option = None
+
+            for index, zipped_field in enumerate(zipped_inclusion):
+                parent = zipped_inclusion[index - 1].resource.Db if index else self.Db
+                joinedload_option = joinedload(getattr(parent, zipped_field.field))
+
+                if option:
+                    option.options(joinedload_option)
+                else:
+                    option = joinedload_option
+
+            options.append(option)
 
         return select(self.Db).options(*options)
 

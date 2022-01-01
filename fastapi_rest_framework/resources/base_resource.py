@@ -29,36 +29,74 @@ class SelectedObj:
     resource: Type["Resource"]
 
 
-def _validate(_relationships: Relationships, _inclusion: list[str]):
-    if not _inclusion:
-        return
-
-    next_inclusions = copy(_inclusion)
-    current_inclusion = next_inclusions.pop(0)
-
-    relationship_info = _relationships.get(current_inclusion)
-    assert relationship_info, f"Invalid inclusion {current_inclusion}"
-
-    if next_relationships := relationship_info.schema_with_relationships.relationships:
-        return _validate(
-            _relationships=next_relationships,
-            _inclusion=next_inclusions,
-        )
+@dataclass
+class InclusionWithResource:
+    field: str
+    resource: type["Resource"]
 
 
 class Resource(ResourceProtocol):
+    registry: dict[Type[BaseModel], type["Resource"]] = {}
+
+    def __init_subclass__(cls) -> None:
+        if Db := getattr(cls, "Db", None):
+            Resource.registry[Db] = cls
+
+        return super().__init_subclass__()
+
     def __init__(self, inclusions: Optional[Inclusions] = None, *args, **kwargs):
         if inclusions:
             self.validate_inclusions(inclusions=inclusions)
 
         self.inclusions = inclusions or []
 
+    def _zipped_inclusions_with_resource(
+        self, _relationships: Relationships, _inclusion: list[str]
+    ) -> list[InclusionWithResource]:
+        if not _inclusion:
+            return []
+
+        next_inclusions = copy(_inclusion)
+        current_inclusion = next_inclusions.pop(0)
+
+        relationship_info = _relationships.get(current_inclusion)
+        assert relationship_info, f"Invalid inclusion {current_inclusion}"
+
+        resource = self.registry[relationship_info.schema_with_relationships.schema]
+
+        zipped_inclusions = [
+            InclusionWithResource(field=current_inclusion, resource=resource)
+        ]
+
+        if (
+            next_relationships := relationship_info.schema_with_relationships.relationships
+        ):
+            zipped_inclusions = [
+                *zipped_inclusions,
+                *self._zipped_inclusions_with_resource(
+                    _relationships=next_relationships,
+                    _inclusion=next_inclusions,
+                ),
+            ]
+
+        return zipped_inclusions
+
     def validate_inclusions(self, inclusions: Inclusions):
         """Validate the inclusions by walking the relationships."""
         relationships = self.get_relationships()
 
         for inclusion in inclusions:
-            _validate(_relationships=relationships, _inclusion=inclusion)
+            self._zipped_inclusions_with_resource(
+                _relationships=relationships, _inclusion=inclusion
+            )
+
+    def zipped_inclusions_with_resource(
+        self, inclusion: list[str]
+    ) -> list[InclusionWithResource]:
+        return self._zipped_inclusions_with_resource(
+            _relationships=self.get_relationships(),
+            _inclusion=inclusion,
+        )
 
     @classmethod
     def get_relationships(cls) -> Relationships:

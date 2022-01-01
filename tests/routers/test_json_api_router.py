@@ -5,7 +5,13 @@ from fastapi.testclient import TestClient
 from fastapi_rest_framework import routers
 from tests.resources.sqlmodel_models import Planet
 from tests.routers import in_memory_resource
-from tests.routers.models import GalaxyResource, PlanetResource, Star, StarResource
+from tests.routers.models import (
+    Galaxy,
+    GalaxyResource,
+    PlanetResource,
+    Star,
+    StarResource,
+)
 
 app = FastAPI()
 
@@ -29,6 +35,7 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def reset_db():
+    in_memory_resource.test_db["galaxy"] = {}
     in_memory_resource.test_db["star"] = {}
     in_memory_resource.test_db["planet"] = {}
 
@@ -106,13 +113,16 @@ class TestList:
         }
 
     def test_include(self):
-        star = Star(name="Sun")
+        galaxy = Galaxy(name="Milky Way")
+        galaxy.id = 1
+        star = Star(name="Sun", galaxy_id=1)
         star.id = 1
         planet = Planet(name="Earth", star_id=1)
         planet.id = 1
         hoth = Planet(name="Hoth")
         hoth.id = 2
 
+        in_memory_resource.test_db["galaxy"][galaxy.id] = galaxy
         in_memory_resource.test_db["star"][star.id] = star
         in_memory_resource.test_db["planet"][planet.id] = planet
         in_memory_resource.test_db["planet"][hoth.id] = hoth
@@ -143,7 +153,7 @@ class TestList:
             ],
             "included": [
                 {
-                    "attributes": {"id": 1, "name": "Sun", "galaxy_id": None},
+                    "attributes": {"id": 1, "name": "Sun", "galaxy_id": 1},
                     "id": "1",
                     "type": "star",
                 }
@@ -209,7 +219,7 @@ class TestSchema:
         galaxy_included = [
             item["$ref"]
             for item in schema["components"]["schemas"][
-                "JAResponseSingle_GalaxyRead__Literal__Union_"
+                "JAResponseSingle_GalaxyRead__Literal__List_"
             ]["properties"]["included"]["items"]["anyOf"]
         ]
 
