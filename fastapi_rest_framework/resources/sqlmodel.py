@@ -211,12 +211,18 @@ class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[
 
             for index, zipped_field in enumerate(zipped_inclusion):
                 parent = zipped_inclusion[index - 1].resource.Db if index else self.Db
-                joinedload_option = joinedload(getattr(parent, zipped_field.field))
+                attr = getattr(parent, zipped_field.field)
 
                 if option:
-                    option.options(joinedload_option)
+                    print(
+                        "Creating child option from", parent, " -> ", zipped_field.field
+                    )
+                    option = option.joinedload(attr)
                 else:
-                    option = joinedload_option
+                    print(
+                        "Creating root option from", parent, " -> ", zipped_field.field
+                    )
+                    option = joinedload(attr)
 
             options.append(option)
 
