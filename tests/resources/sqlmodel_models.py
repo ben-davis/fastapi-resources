@@ -34,7 +34,6 @@ class PlanetRead(PlanetBase):
 
 
 class PlanetUpdate(SQLModel, registry=registry):
-    id: Optional[int] = None
     name: Optional[str] = None
 
 
@@ -61,7 +60,6 @@ class StarRead(StarBase):
 
 
 class StarUpdate(SQLModel, registry=registry):
-    id: Optional[int] = None
     name: Optional[str] = None
 
 
@@ -86,7 +84,6 @@ class GalaxyRead(GalaxyBase):
 
 
 class GalaxyUpdate(SQLModel, registry=registry):
-    id: Optional[int] = None
     name: Optional[str] = None
 
 

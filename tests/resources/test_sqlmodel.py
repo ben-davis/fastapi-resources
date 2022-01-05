@@ -1,6 +1,7 @@
 import pytest
+from sqlalchemy.orm import exc as sa_exceptions
 from sqlalchemy.orm.session import close_all_sessions
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from tests.resources.sqlmodel_models import (
     Galaxy,
@@ -10,8 +11,10 @@ from tests.resources.sqlmodel_models import (
     PlanetRead,
     PlanetResource,
     Star,
+    StarCreate,
     StarRead,
     StarResource,
+    StarUpdate,
     engine,
     registry,
 )
@@ -220,3 +223,87 @@ class TestRetrieve:
             related = resource.get_related(galaxy_retrieve, ["stars", "planets"])
 
         assert related[0].obj.name == "Sun"
+
+
+class TestList:
+    def test_list(self, session: Session):
+        star = Star(name="Sirius")
+        session.add(star)
+        session.commit()
+        session.refresh(star)
+
+        assert star.id
+
+        resource = StarResource(session=session)
+        star_list = resource.list()
+
+        assert len(star_list) == 1
+        assert star_list[0].name == "Sirius"
+
+
+class TestCreate:
+    def test_create(self, session: Session):
+        resource = StarResource(session=session)
+        star_create = resource.create(model=StarCreate(name="Sirius"))
+
+        star_db = session.exec(select(Star).where(Star.id == star_create.id)).one()
+
+        assert star_create.name == "Sirius"
+        assert star_db.name == "Sirius"
+
+    def test_extra_attributes(self, session: Session):
+        resource = StarResource(session=session)
+        star_create = resource.create(
+            model=StarCreate(name="Milky Way"), name="Passed Manually"
+        )
+
+        assert star_create.name == "Passed Manually"
+
+
+class TestUpdate:
+    def test_update(self, session: Session):
+        star = Star(name="Sirius")
+        session.add(star)
+        session.commit()
+        session.refresh(star)
+
+        assert star.id
+
+        resource = StarResource(session=session)
+        star_create = resource.update(id=star.id, model=StarUpdate(name="Milky Way"))
+
+        star_db = session.exec(select(Star).where(Star.id == star.id)).one()
+
+        assert star_create.name == "Milky Way"
+        assert star_db.name == "Milky Way"
+
+    def test_extra_attributes(self, session: Session):
+        star = Star(name="Sirius")
+        session.add(star)
+        session.commit()
+        session.refresh(star)
+
+        assert star.id
+
+        resource = StarResource(session=session)
+        star_create = resource.update(
+            id=star.id, model=StarUpdate(), name="Passed Manually"
+        )
+
+        assert star_create.name == "Passed Manually"
+
+
+class TestDelete:
+    def test_delete(self, session: Session):
+        star = Star(name="Sirius")
+        session.add(star)
+        session.commit()
+        session.refresh(star)
+
+        assert star.id
+
+        resource = StarResource(session=session)
+        resource.delete(id=star.id)
+
+        with pytest.raises(sa_exceptions.NoResultFound):
+            session.exec(select(Star).where(Star.id == star.id)).one()

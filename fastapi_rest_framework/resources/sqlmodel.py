@@ -291,8 +291,13 @@ class CreateResourceMixin:
     def create(
         self: SQLResourceProtocol,
         model: SQLModel,
+        **kwargs,
     ):
         row = self.Db.from_orm(model)
+
+        for key, value in kwargs.items():
+            setattr(row, key, value)
+
         self.session.add(row)
         self.session.commit()
 
@@ -307,11 +312,12 @@ class UpdateResourceMixin:
         *,
         id: int | str,
         model: SQLModel,
+        **kwargs,
     ):
         row = self.get_object(id=id)
 
         data = model.dict(exclude_unset=True)
-        for key, value in data.items():
+        for key, value in list(data.items()) + list(kwargs.items()):
             setattr(row, key, value)
 
         self.session.add(row)
