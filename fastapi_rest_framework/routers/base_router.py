@@ -1,10 +1,22 @@
 import inspect
-from typing import List, Union
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Generic,
+    List,
+    Optional,
+    Protocol,
+    TypeVar,
+    Union,
+    runtime_checkable,
+)
 
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
 from fastapi_rest_framework.resources.base_resource import Resource
+from fastapi_rest_framework.routers import decorators
 
 
 class TCreatePayload(BaseModel):
@@ -15,30 +27,44 @@ class TUpdatePayload(BaseModel):
     pass
 
 
-class ResourceRouter(APIRouter):
+TResource = TypeVar("TResource", bound=Resource, covariant=True)
+
+
+@runtime_checkable
+class Action(Protocol):
+    detail: bool
+    methods: decorators.methods
+    kwargs: dict[str, Any]
+
+    def __call__(self):
+        ...
+
+
+class ResourceRouter(APIRouter, Generic[TResource]):
+    resource_class: type[TResource]
+
     def __init__(
         self,
         *,
-        resource_class: type[Resource],
+        resource_class: type[TResource],
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
 
         self.resource_class = resource_class
-
         self.method_replacements = self.get_method_replacements()
         self.ReadResponseModel = self.get_read_response_model()
         self.ListResponseModel = self.get_list_response_model()
 
         self._patch_route_types()
-        self._link_routes(resource_class=resource_class)
+        self._link_routes()
 
     def get_read_response_model(self):
         return self.resource_class.Read
 
     def get_list_response_model(self):
-        resource_class = self.resource_class
-        return List[resource_class.Read]
+        Read = self.resource_class.Read
+        return List[Read]
 
     def get_method_replacements(self):
         return {
@@ -86,7 +112,11 @@ class ResourceRouter(APIRouter):
             setattr(self, method_name, factory(method_name))
             getattr(self, method_name).__signature__ = updated_signature
 
-    def _link_routes(self, resource_class: type[Resource]):
+    def _link_routes(self):
+        resource_class = self.resource_class
+
+        self._link_actions()
+
         if resource_class.retrieve:
             self.get(
                 f"/{{id}}",
@@ -119,6 +149,29 @@ class ResourceRouter(APIRouter):
             self.delete(f"/{{id}}", summary=f"Delete {resource_class.name}")(
                 self._delete
             )
+
+    def _link_actions(self):
+        resource_class = self.resource_class
+
+        for action in inspect.getmembers(object=self):
+            name, func = action
+
+            if not isinstance(func, Action):
+                continue
+
+            func.detail
+            for method in func.methods:
+                route_method = getattr(self, method)
+                response_model = (
+                    self.ReadResponseModel if func.detail else self.ListResponseModel
+                )
+                url = f"/{{id}}/{name}" if func.detail else f"/{name}"
+
+                route_method(
+                    url,
+                    summary=f"{resource_class.name} {name}",
+                    response_model=response_model,
+                )(func)
 
     def get_resource(self, request: Request):
         return self.resource_class()

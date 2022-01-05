@@ -1,13 +1,17 @@
+from typing import Generic, TypeVar
+
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from pydantic.generics import GenericModel
 
 from fastapi_rest_framework import routers
-from tests.resources.sqlmodel_models import Planet
+from fastapi_rest_framework.routers import decorators
 from tests.routers import in_memory_resource
 from tests.routers.models import (
     Galaxy,
     GalaxyResource,
+    GalaxyUpdate,
     PlanetResource,
     Star,
     StarResource,
@@ -17,7 +21,42 @@ app = FastAPI()
 
 planet_router = routers.ResourceRouter(prefix="/planets", resource_class=PlanetResource)
 star_router = routers.ResourceRouter(prefix="/stars", resource_class=StarResource)
-galaxy_router = routers.ResourceRouter(prefix="/stars", resource_class=GalaxyResource)
+
+
+T = TypeVar("T")
+
+
+class Envelope(GenericModel, Generic[T]):
+    data: T
+
+
+class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
+    # Envelope the response so we can check that actions call build_respone
+    def build_response(self, resource, rows):
+        data = super().build_response(resource, rows)
+        return {"data": data}
+
+    def get_read_response_model(self):
+        model = super().get_read_response_model()
+        return Envelope[model]
+
+    def get_list_response_model(self):
+        model = super().get_list_response_model()
+        return Envelope[model]
+
+    @decorators.action(detail=False)
+    def distant_galaxies(self, request: Request):
+        resource = self.get_resource(request=request)
+        return resource.list()
+
+    @decorators.action(detail=True, methods=["patch"])
+    def rename(self, id: int, request: Request):
+        resource = self.get_resource(request=request)
+        obj = resource.update(id=id, model=GalaxyUpdate(name="Andromeda"))
+        return obj
+
+
+galaxy_router = GalaxyResourceRouter(prefix="/galaxies", resource_class=GalaxyResource)
 
 app.include_router(planet_router)
 app.include_router(star_router)
@@ -106,3 +145,29 @@ class TestDelete:
         assert response.status_code == 204
 
         assert not in_memory_resource.test_db["star"]
+
+
+class TestActions:
+    def test_list(self):
+        galaxy = Galaxy(name="Milky Way")
+        galaxy.id = 1
+
+        in_memory_resource.test_db["galaxy"][galaxy.id] = galaxy
+
+        response = client.get("/galaxies/distant_galaxies")
+        assert response.status_code == 200
+        assert response.json() == {
+            "data": [
+                {"id": 1, "name": "Milky Way"},
+            ]
+        }
+
+    def test_update(self):
+        galaxy = Galaxy(name="Milky Way")
+        galaxy.id = 1
+
+        in_memory_resource.test_db["galaxy"][galaxy.id] = galaxy
+
+        response = client.patch(f"/galaxies/{galaxy.id}/rename")
+        assert response.status_code == 200
+        assert response.json() == {"data": {"id": 1, "name": "Andromeda"}}

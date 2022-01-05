@@ -1,9 +1,10 @@
 from typing import List, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from sqlmodel import Field, Relationship, SQLModel, create_engine
 
 from fastapi_rest_framework import resources, routers
+from fastapi_rest_framework.routers import decorators
 
 sqlite_file_name = "database.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
@@ -41,7 +42,6 @@ class PlanetRead(PlanetBase):
 
 
 class PlanetUpdate(SQLModel):
-    id: Optional[int] = None
     name: Optional[str] = None
     favorite_galaxy_id: Optional[str] = None
 
@@ -69,7 +69,6 @@ class StarRead(StarBase):
 
 
 class StarUpdate(SQLModel):
-    id: Optional[int] = None
     name: Optional[str] = None
 
 
@@ -94,7 +93,6 @@ class GalaxyRead(GalaxyBase):
 
 
 class GalaxyUpdate(SQLModel):
-    id: Optional[int] = None
     name: Optional[str] = None
 
 
@@ -125,7 +123,20 @@ class GalaxyResource(resources.SQLModelResource[Galaxy]):
     Update = GalaxyUpdate
 
 
-galaxy = routers.JSONAPIResourceRouter(
+class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
+    @decorators.action(detail=False)
+    def distant_galaxies(self, request: Request):
+        resource = self.get_resource(request=request)
+        return resource.list()
+
+    @decorators.action(detail=True, methods=["patch"])
+    def rename(self, id: int, request: Request):
+        resource = self.get_resource(request=request)
+        obj = resource.update(id=id, model=GalaxyUpdate(name="Andromeda"))
+        return obj
+
+
+galaxy = GalaxyResourceRouter(
     prefix="/galaxies", resource_class=GalaxyResource, tags=["Galaxies"]
 )
 star = routers.JSONAPIResourceRouter(
