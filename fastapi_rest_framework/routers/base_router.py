@@ -1,16 +1,5 @@
 import inspect
-from typing import (
-    Any,
-    Callable,
-    ClassVar,
-    Generic,
-    List,
-    Optional,
-    Protocol,
-    TypeVar,
-    Union,
-    runtime_checkable,
-)
+from typing import Any, Generic, List, Protocol, TypeVar, Union, runtime_checkable
 
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
@@ -27,7 +16,7 @@ class TUpdatePayload(BaseModel):
     pass
 
 
-TResource = TypeVar("TResource", bound=Resource, covariant=True)
+TResource = TypeVar("TResource", bound=Resource)
 
 
 @runtime_checkable
@@ -136,6 +125,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
                 f"/",
                 response_model=self.ReadResponseModel,
                 summary=f"Create {resource_class.name}",
+                status_code=201,
             )(self._create)
 
         if resource_class.update:
@@ -159,7 +149,6 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             if not isinstance(func, Action):
                 continue
 
-            func.detail
             for method in func.methods:
                 route_method = getattr(self, method)
                 response_model = (
@@ -181,6 +170,32 @@ class ResourceRouter(APIRouter, Generic[TResource]):
     ):
         return rows
 
+    def perform_create(
+        self, request: Request, resource: TResource, create: TCreatePayload
+    ):
+        if not resource.create:
+            raise NotImplementedError("Resource.create not implemented")
+
+        return resource.create(model=create)
+
+    def perform_update(
+        self,
+        request: Request,
+        resource: TResource,
+        id: str | int,
+        update: TUpdatePayload,
+    ):
+        if not resource.update:
+            raise NotImplementedError("Resource.update not implemented")
+
+        return resource.update(id=id, model=update)
+
+    def perform_delete(self, request: Request, resource: TResource, id: str | int):
+        if not resource.delete:
+            raise NotImplementedError("Resource.delete not implemented")
+
+        return resource.delete(id=id)
+
     def _retrieve(self, *, id: Union[int, str], request: Request):
         resource = self.get_resource(request=request)
         if not resource.retrieve:
@@ -199,45 +214,23 @@ class ResourceRouter(APIRouter, Generic[TResource]):
 
     def _create(self, *, create: TCreatePayload, request: Request):
         resource = self.get_resource(request=request)
-        if not resource.create:
-            raise NotImplementedError("Resource.create not implemented")
 
-        row = resource.create(model=create)
+        row = self.perform_create(request=request, resource=resource, create=create)
+
         return self.build_response(rows=row, resource=resource)
 
     def _update(self, *, id: Union[int, str], update: TUpdatePayload, request: Request):
         resource = self.get_resource(request=request)
-        if not resource.update:
-            raise NotImplementedError("Resource.update not implemented")
 
-        row = resource.update(id=id, model=update)
+        row = self.perform_update(
+            request=request, resource=resource, update=update, id=id
+        )
+
         return self.build_response(rows=row, resource=resource)
 
     def _delete(self, *, id: Union[int, str], request: Request):
         resource = self.get_resource(request=request)
-        if not resource.delete:
-            raise NotImplementedError("Resource.delete not implemented")
 
-        resource.delete(id=id)
+        self.perform_delete(request=request, resource=resource, id=id)
 
         return Response(status_code=204)
-
-
-"""
-    Question: how to allow the resource to receive pre-parsed inclusions as that
-    should be specific to the router.
-
-    Can it be added to ther request?
-
-    But then it won't be available to FastAPI for docs/processing by pydantic.
-
-    I think it would have to be added via functool.wraps
-
-    That's what I was thinking the resource should be non-route specific and instead the
-    routes are built once the resource is available.
-
-    I think it could be constructed via a middleware and then added to the request.
-
-    It does make more sense for the router to create the routes as then the jsonapi specific router
-    would easily be able to add sorting/filtering etc.
-"""

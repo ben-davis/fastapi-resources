@@ -1,4 +1,5 @@
 from typing import Generic, TypeVar
+from unittest import mock
 
 import pytest
 from fastapi import FastAPI, Request
@@ -10,6 +11,7 @@ from fastapi_rest_framework.routers import decorators
 from tests.routers import in_memory_resource
 from tests.routers.models import (
     Galaxy,
+    GalaxyCreate,
     GalaxyResource,
     GalaxyUpdate,
     PlanetResource,
@@ -28,6 +30,12 @@ T = TypeVar("T")
 
 class Envelope(GenericModel, Generic[T]):
     data: T
+
+
+class FakeJobs:
+    @staticmethod
+    def do_something():
+        pass
 
 
 class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
@@ -54,6 +62,22 @@ class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
         resource = self.get_resource(request=request)
         obj = resource.update(id=id, model=GalaxyUpdate(name="Andromeda"))
         return obj
+
+    def perform_update(
+        self, request: Request, resource: GalaxyResource, id: int, update: GalaxyUpdate
+    ):
+        update.name = "ProvidedByPerformUpdate"
+        return resource.update(id=id, model=update)
+
+    def perform_create(
+        self, request: Request, resource: GalaxyResource, create: GalaxyCreate
+    ):
+        create.name = "ProvidedByPerformCreate"
+        return resource.create(model=create)
+
+    def perform_delete(self, request: Request, resource: GalaxyResource, id: int):
+        FakeJobs.do_something()
+        return resource.delete(id=id)
 
 
 galaxy_router = GalaxyResourceRouter(prefix="/galaxies", resource_class=GalaxyResource)
@@ -124,7 +148,7 @@ class TestCreate:
     def test_create(self):
         response = client.post(f"/stars/", json={"name": "Vega"})
 
-        assert response.status_code == 200
+        assert response.status_code == 201
         assert response.json() == {
             "id": 1,
             "name": "Vega",
@@ -171,3 +195,36 @@ class TestActions:
         response = client.patch(f"/galaxies/{galaxy.id}/rename")
         assert response.status_code == 200
         assert response.json() == {"data": {"id": 1, "name": "Andromeda"}}
+
+
+class TestPerformHooks:
+    def test_perform_create(self):
+        response = client.post(f"/galaxies/", json={"name": "will be ignored"})
+
+        assert response.status_code == 201
+        assert response.json()["data"]["name"] == "ProvidedByPerformCreate"
+
+    def test_perform_update(self):
+        galaxy = Galaxy(name="Milky Way")
+        galaxy.id = 1
+
+        in_memory_resource.test_db["galaxy"][galaxy.id] = galaxy
+
+        response = client.patch(
+            f"/galaxies/{galaxy.id}", json={"name": "will be ignored"}
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"data": {"id": 1, "name": "ProvidedByPerformUpdate"}}
+
+    def test_perform_delete(self):
+        galaxy = Galaxy(name="Milky Way")
+        galaxy.id = 1
+
+        in_memory_resource.test_db["galaxy"][galaxy.id] = galaxy
+
+        with mock.patch.object(FakeJobs, "do_something") as patched_fake_job:
+            response = client.delete(f"/galaxies/{galaxy.id}")
+
+            assert response.status_code == 204
+            patched_fake_job.assert_called_once()

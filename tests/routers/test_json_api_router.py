@@ -188,7 +188,7 @@ class TestCreate:
     def test_create(self):
         response = client.post(f"/stars/", json={"name": "Vega"})
 
-        assert response.status_code == 200
+        assert response.status_code == 201
         assert response.json() == {
             "data": {
                 "attributes": {"id": 1, "name": "Vega", "galaxy_id": None},
