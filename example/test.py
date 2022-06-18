@@ -124,6 +124,8 @@ class GalaxyResource(resources.SQLModelResource[Galaxy]):
 
 
 class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
+    resource_class = GalaxyResource
+
     @decorators.action(detail=False)
     def distant_galaxies(self, request: Request):
         resource = self.get_resource(request=request)
@@ -136,9 +138,7 @@ class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
         return obj
 
 
-galaxy = GalaxyResourceRouter(
-    prefix="/galaxies", resource_class=GalaxyResource, tags=["Galaxies"]
-)
+galaxy = GalaxyResourceRouter(prefix="/galaxies", tags=["Galaxies"])
 star = routers.JSONAPIResourceRouter(
     prefix="/stars", resource_class=StarResource, tags=["Stars"]
 )
@@ -149,17 +149,3 @@ planet = routers.JSONAPIResourceRouter(
 app.include_router(galaxy)
 app.include_router(star)
 app.include_router(planet)
-
-
-"""
-TODO:
-x Relationships and automatically supported and documented `includes` with efficient prefetches.
-x Nested relationships
-- Post create & update hooks.
-    - Ensure it can support things like easily saving the user from the request as an attr on a model
-x An equivalent of get_queryset so users can do row-level permissions.
-- How to support actions?
-x Can JSON:API be an optional thing?
-- Filtering/sorting on lists
-- All other JSON:API compliance
-"""

@@ -5,14 +5,11 @@ from sqlmodel import Session, select
 
 from tests.resources.sqlmodel_models import (
     Galaxy,
-    GalaxyRead,
     GalaxyResource,
     Planet,
-    PlanetRead,
     PlanetResource,
     Star,
     StarCreate,
-    StarRead,
     StarResource,
     StarUpdate,
     engine,

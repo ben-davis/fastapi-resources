@@ -1,5 +1,14 @@
 import inspect
-from typing import Any, Generic, List, Protocol, TypeVar, Union, runtime_checkable
+from typing import (
+    Any,
+    Generic,
+    List,
+    Optional,
+    Protocol,
+    TypeVar,
+    Union,
+    runtime_checkable,
+)
 
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
@@ -35,12 +44,14 @@ class ResourceRouter(APIRouter, Generic[TResource]):
     def __init__(
         self,
         *,
-        resource_class: type[TResource],
+        resource_class: Optional[type[TResource]] = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
 
-        self.resource_class = resource_class
+        if resource_class:
+            self.resource_class = resource_class
+
         self.method_replacements = self.get_method_replacements()
         self.ReadResponseModel = self.get_read_response_model()
         self.ListResponseModel = self.get_list_response_model()
