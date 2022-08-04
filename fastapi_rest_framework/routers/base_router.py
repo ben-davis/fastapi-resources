@@ -126,14 +126,14 @@ class ResourceRouter(APIRouter, Generic[TResource]):
 
         if resource_class.list:
             self.get(
-                f"/",
+                f"",
                 response_model=self.ListResponseModel,
                 summary=f"Get {resource_class.name} list",
             )(self._list)
 
         if resource_class.create:
             self.post(
-                f"/",
+                f"",
                 response_model=self.ReadResponseModel,
                 summary=f"Create {resource_class.name}",
                 status_code=201,
@@ -177,7 +177,10 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         return self.resource_class()
 
     def build_response(
-        self, resource: Resource, rows: Union[BaseModel, List[BaseModel]]
+        self,
+        resource: Resource,
+        rows: Union[BaseModel, List[BaseModel]],
+        request: Request,
     ):
         return rows
 
@@ -213,7 +216,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             raise NotImplementedError("Resource.retrieve not implemented")
 
         row = resource.retrieve(id=id)
-        return self.build_response(rows=row, resource=resource)
+        return self.build_response(rows=row, resource=resource, request=request)
 
     def _list(self, *, request: Request):
         resource = self.get_resource(request=request)
@@ -221,14 +224,14 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             raise NotImplementedError("Resource.list not implemented")
 
         rows = resource.list()
-        return self.build_response(rows=rows, resource=resource)
+        return self.build_response(rows=rows, resource=resource, request=request)
 
     def _create(self, *, create: TCreatePayload, request: Request):
         resource = self.get_resource(request=request)
 
         row = self.perform_create(request=request, resource=resource, create=create)
 
-        return self.build_response(rows=row, resource=resource)
+        return self.build_response(rows=row, resource=resource, request=request)
 
     def _update(self, *, id: Union[int, str], update: TUpdatePayload, request: Request):
         resource = self.get_resource(request=request)
@@ -237,7 +240,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             request=request, resource=resource, update=update, id=id
         )
 
-        return self.build_response(rows=row, resource=resource)
+        return self.build_response(rows=row, resource=resource, request=request)
 
     def _delete(self, *, id: Union[int, str], request: Request):
         resource = self.get_resource(request=request)

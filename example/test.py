@@ -138,13 +138,9 @@ class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
         return obj
 
 
-galaxy = GalaxyResourceRouter(prefix="/galaxies", tags=["Galaxies"])
-star = routers.JSONAPIResourceRouter(
-    prefix="/stars", resource_class=StarResource, tags=["Stars"]
-)
-planet = routers.JSONAPIResourceRouter(
-    prefix="/planets", resource_class=PlanetResource, tags=["Planets"]
-)
+galaxy = GalaxyResourceRouter(tags=["Galaxies"])
+star = routers.JSONAPIResourceRouter(resource_class=StarResource, tags=["Stars"])
+planet = routers.JSONAPIResourceRouter(resource_class=PlanetResource, tags=["Planets"])
 
 app.include_router(galaxy)
 app.include_router(star)

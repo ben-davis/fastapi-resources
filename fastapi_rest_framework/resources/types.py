@@ -14,6 +14,7 @@ Inclusions = list[list[str]]
 
 class ResourceProtocol(Protocol):
     name: ClassVar[str]
+    plural_name: ClassVar[str]
 
     Db: ClassVar[Type[BaseModel]]
     Read: ClassVar[Type[BaseModel]]

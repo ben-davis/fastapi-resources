@@ -1,6 +1,6 @@
 from copy import copy
 from dataclasses import dataclass
-from typing import Optional, Type
+from typing import ClassVar, Optional, Type
 
 from pydantic.main import BaseModel
 
@@ -36,11 +36,18 @@ class InclusionWithResource:
 
 
 class Resource(ResourceProtocol):
+    # name: ClassVar[str]
+    # plural_name: ClassVar[Optional[str]]
+
     registry: dict[Type[BaseModel], type["Resource"]] = {}
 
     def __init_subclass__(cls) -> None:
         if Db := getattr(cls, "Db", None):
             Resource.registry[Db] = cls
+
+        # Pluralize name
+        if name := getattr(cls, "name", None):
+            cls.plural_name = getattr(cls, "plural_name", None) or f"{name}s"
 
         return super().__init_subclass__()
 

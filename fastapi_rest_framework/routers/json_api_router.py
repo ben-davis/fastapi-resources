@@ -1,6 +1,6 @@
-from typing import Generic, List, Literal, Optional, TypeVar, Union
+from typing import Generic, List, Literal, Optional, Type, TypeVar, Union
 
-from fastapi import Query, Request, Response
+from fastapi import Query, Request
 from pydantic.generics import GenericModel
 from pydantic.main import BaseModel
 
@@ -19,20 +19,31 @@ class TIncludeParam(str):
     pass
 
 
+class JALinks(BaseModel):
+    """A links-object"""
+
+    self: Optional[str]
+    # Will be used when relationship endpoints are implemented
+    # related: Optional[str] = None
+
+
 class JAResource(GenericModel, Generic[TRead, TName]):
     id: str
     type: TName
     attributes: TRead
+    links: JALinks
 
 
 class JAResponseSingle(GenericModel, Generic[TRead, TName, TIncluded]):
     data: JAResource[TRead, TName]
     included: TIncluded
+    links: JALinks
 
 
 class JAResponseList(GenericModel, Generic[TRead, TName, TIncluded]):
     data: List[JAResource[TRead, TName]]
     included: TIncluded
+    links: JALinks
 
 
 include_query = Query(None, regex=r"^([\w\.]+)(,[\w\.]+)*$")
@@ -67,7 +78,11 @@ class JSONAPIResourceRouter(ResourceRouter):
     ) -> None:
         self.resource_class = resource_class
 
-        super().__init__(resource_class=resource_class, **kwargs)
+        super().__init__(
+            resource_class=resource_class,
+            prefix=f"/{resource_class.plural_name}",
+            **kwargs,
+        )
 
     def get_included_schema(self) -> tuple[type[BaseModel], ...]:
         relationships = self.resource_class.get_relationships()
@@ -106,10 +121,22 @@ class JSONAPIResourceRouter(ResourceRouter):
 
         return self.resource_class(inclusions=inclusions)
 
+    def build_document_links(self, request: Request):
+        path = request.url.path
+
+        if query := request.url.query:
+            path = f"{path}?{query}"
+
+        return JALinks(self=path)
+
+    def build_resource_links(self, id: str, resource: Union[Type[Resource], Resource]):
+        return JALinks(self=f"/{resource.plural_name}/{id}")
+
     def build_response(
         self,
         rows: Union[BaseModel, list[BaseModel]],
         resource: Resource,
+        request: Request,
     ):
         included_resources = {}
 
@@ -128,17 +155,28 @@ class JSONAPIResourceRouter(ResourceRouter):
                         id=obj.id,
                         type=related_resource.name,
                         attributes=related_resource.Read.from_orm(obj),
+                        links=self.build_resource_links(
+                            id=obj.id, resource=related_resource
+                        ),
                     )
 
         data = [
-            JAResource(id=row.id, attributes=row, type=resource.name) for row in rows
+            JAResource(
+                id=row.id,
+                attributes=row,
+                type=resource.name,
+                links=self.build_resource_links(id=row.id, resource=resource),
+            )
+            for row in rows
         ]
         data = data if many else data[0]
         ResponseSchema = JAResponseList if many else JAResponseSingle
 
+        # Get top-level resource links
+        links = self.build_document_links(request=request)
+
         return ResponseSchema(
-            data=data,
-            included=list(included_resources.values()),
+            data=data, included=list(included_resources.values()), links=links
         )
 
     def _retrieve(

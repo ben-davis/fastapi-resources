@@ -15,15 +15,9 @@ from tests.routers.models import (
 
 app = FastAPI()
 
-planet_router = routers.JSONAPIResourceRouter(
-    prefix="/planets", resource_class=PlanetResource
-)
-star_router = routers.JSONAPIResourceRouter(
-    prefix="/stars", resource_class=StarResource
-)
-galaxy_router = routers.JSONAPIResourceRouter(
-    prefix="/stars", resource_class=GalaxyResource
-)
+planet_router = routers.JSONAPIResourceRouter(resource_class=PlanetResource)
+star_router = routers.JSONAPIResourceRouter(resource_class=StarResource)
+galaxy_router = routers.JSONAPIResourceRouter(resource_class=GalaxyResource)
 
 app.include_router(planet_router)
 app.include_router(star_router)
@@ -56,8 +50,10 @@ class TestRetrieve:
                 "attributes": {"id": 1, "name": "Sirius", "galaxy_id": None},
                 "id": "1",
                 "type": "star",
+                "links": {"self": "/stars/1"},
             },
             "included": [],
+            "links": {"self": "/stars/1"},
         }
 
     def test_include(self):
@@ -81,14 +77,17 @@ class TestRetrieve:
                 },
                 "id": "1",
                 "type": "planet",
+                "links": {"self": "/planets/1"},
             },
             "included": [
                 {
                     "attributes": {"id": 1, "name": "Sun", "galaxy_id": None},
                     "id": "1",
                     "type": "star",
+                    "links": {"self": "/stars/1"},
                 }
             ],
+            "links": {"self": "/planets/1?include=star"},
         }
 
 
@@ -99,7 +98,7 @@ class TestList:
 
         in_memory_resource.test_db["star"][star.id] = star
 
-        response = client.get(f"/stars/")
+        response = client.get(f"/stars")
 
         assert response.status_code == 200
         assert response.json() == {
@@ -108,9 +107,11 @@ class TestList:
                     "attributes": {"id": 1, "name": "Sirius", "galaxy_id": None},
                     "id": "1",
                     "type": "star",
+                    "links": {"self": "/stars/1"},
                 }
             ],
             "included": [],
+            "links": {"self": "/stars"},
         }
 
     def test_include(self):
@@ -128,7 +129,7 @@ class TestList:
         in_memory_resource.test_db["planet"][planet.id] = planet
         in_memory_resource.test_db["planet"][hoth.id] = hoth
 
-        response = client.get(f"/planets/?include=star")
+        response = client.get(f"/planets?include=star")
 
         assert response.status_code == 200
         assert response.json() == {
@@ -141,6 +142,7 @@ class TestList:
                     },
                     "id": "1",
                     "type": "planet",
+                    "links": {"self": "/planets/1"},
                 },
                 {
                     "attributes": {
@@ -150,6 +152,7 @@ class TestList:
                     },
                     "id": "2",
                     "type": "planet",
+                    "links": {"self": "/planets/2"},
                 },
             ],
             "included": [
@@ -157,8 +160,10 @@ class TestList:
                     "attributes": {"id": 1, "name": "Sun", "galaxy_id": 1},
                     "id": "1",
                     "type": "star",
+                    "links": {"self": "/stars/1"},
                 }
             ],
+            "links": {"self": "/planets?include=star"},
         }
 
 
@@ -177,8 +182,10 @@ class TestUpdate:
                 "attributes": {"id": 1, "name": "Vega", "galaxy_id": None},
                 "id": "1",
                 "type": "star",
+                "links": {"self": "/stars/1"},
             },
             "included": [],
+            "links": {"self": "/stars/1"},
         }
 
         assert in_memory_resource.test_db["star"][1].name == "Vega"
@@ -186,7 +193,7 @@ class TestUpdate:
 
 class TestCreate:
     def test_create(self):
-        response = client.post(f"/stars/", json={"name": "Vega"})
+        response = client.post(f"/stars", json={"name": "Vega"})
 
         assert response.status_code == 201
         assert response.json() == {
@@ -194,8 +201,10 @@ class TestCreate:
                 "attributes": {"id": 1, "name": "Vega", "galaxy_id": None},
                 "id": "1",
                 "type": "star",
+                "links": {"self": "/stars/1"},
             },
             "included": [],
+            "links": {"self": "/stars"},
         }
 
         assert in_memory_resource.test_db["star"][1]
