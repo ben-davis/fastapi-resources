@@ -3,8 +3,8 @@ from typing import List, Optional
 from fastapi import FastAPI, Request
 from sqlmodel import Field, Relationship, SQLModel, create_engine
 
-from fastapi_rest_framework import resources, routers
-from fastapi_rest_framework.routers import decorators
+from fastapi_resources import resources, routers
+from fastapi_resources.routers import decorators
 
 sqlite_file_name = "database.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"

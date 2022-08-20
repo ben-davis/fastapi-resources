@@ -13,8 +13,8 @@ from typing import (
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
-from fastapi_rest_framework.resources.base_resource import Resource
-from fastapi_rest_framework.routers import decorators
+from fastapi_resources.resources.base_resource import Resource
+from fastapi_resources.routers import decorators
 
 
 class TCreatePayload(BaseModel):
@@ -121,6 +121,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             self.get(
                 f"/{{id}}",
                 response_model=self.ReadResponseModel,
+                response_model_exclude_unset=True,
                 summary=f"Get {resource_class.name}",
             )(self._retrieve)
 
@@ -128,6 +129,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             self.get(
                 f"",
                 response_model=self.ListResponseModel,
+                response_model_exclude_unset=True,
                 summary=f"Get {resource_class.name} list",
             )(self._list)
 
@@ -135,6 +137,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             self.post(
                 f"",
                 response_model=self.ReadResponseModel,
+                response_model_exclude_unset=True,
                 summary=f"Create {resource_class.name}",
                 status_code=201,
             )(self._create)
@@ -143,6 +146,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             self.patch(
                 f"/{{id}}",
                 response_model=self.ReadResponseModel,
+                response_model_exclude_unset=True,
                 summary=f"Update {resource_class.name}",
             )(self._update)
 

@@ -3,7 +3,7 @@ from typing import List, Optional
 from sqlalchemy.orm import registry as sa_registry
 from sqlmodel import Field, Relationship, SQLModel, create_engine
 
-from fastapi_rest_framework.resources import SQLModelResource
+from fastapi_resources.resources import SQLModelResource
 
 registry = sa_registry()
 

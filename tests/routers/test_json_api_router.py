@@ -1,17 +1,11 @@
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from fastapi_rest_framework import routers
+from fastapi_resources import routers
 from tests.resources.sqlmodel_models import Planet
 from tests.routers import in_memory_resource
-from tests.routers.models import (
-    Galaxy,
-    GalaxyResource,
-    PlanetResource,
-    Star,
-    StarResource,
-)
+from tests.routers.models import (Galaxy, GalaxyResource, PlanetResource, Star,
+                                  StarResource)
 
 app = FastAPI()
 
@@ -47,10 +41,26 @@ class TestRetrieve:
         assert response.status_code == 200
         assert response.json() == {
             "data": {
-                "attributes": {"id": 1, "name": "Sirius", "galaxy_id": None},
+                "attributes": {"id": 1, "name": "Sirius"},
                 "id": "1",
                 "type": "star",
                 "links": {"self": "/stars/1"},
+                "relationships": {
+                    "planets": {
+                        "data": [],
+                        "links": {
+                            "related": "/stars/1/planets",
+                            "self": "/stars/1/relationships/planets",
+                        },
+                    },
+                    "galaxy": {
+                        "data": None,
+                        "links": {
+                            "related": "/stars/1/galaxy",
+                            "self": "/stars/1/relationships/galaxy",
+                        }
+                    }
+                },
             },
             "included": [],
             "links": {"self": "/stars/1"},
@@ -70,13 +80,23 @@ class TestRetrieve:
         assert response.status_code == 200
         assert response.json() == {
             "data": {
-                "attributes": {
-                    "id": 1,
-                    "name": "Earth",
-                    "star_id": 1,
-                },
                 "id": "1",
+                "attributes": {
+                    "name": "Earth",
+                },
                 "type": "planet",
+                "relationships": {
+                    "star": {
+                        "data": {
+                            "type": "star",
+                            "id": "1"
+                        },
+                        "links": {
+                            "related": "/planets/1/star",
+                            "self": "/planets/1/relationships/star",
+                        }
+                    }
+                },
                 "links": {"self": "/planets/1"},
             },
             "included": [
@@ -236,6 +256,6 @@ class TestSchema:
         # Galaxy only has Star as a direct relationship, so the inclusion
         # of a planet shows the router is walking the relationships.
         assert galaxy_included == [
-            "#/components/schemas/JAResource_Star__Literal_",
-            "#/components/schemas/JAResource_Planet__Literal_",
+            "#/components/schemas/JAResourceObject_Star__Literal_",
+            "#/components/schemas/JAResourceObject_Planet__Literal_",
         ]

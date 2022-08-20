@@ -4,9 +4,9 @@ from fastapi import Query, Request
 from pydantic.generics import GenericModel
 from pydantic.main import BaseModel
 
-from fastapi_rest_framework.resources.base_resource import Relationships, Resource
-from fastapi_rest_framework.resources.types import Inclusions
-from fastapi_rest_framework.routers import base_router
+from fastapi_resources.resources.base_resource import Relationships, Resource
+from fastapi_resources.resources.types import Inclusions
+from fastapi_resources.routers import base_router
 
 from .base_router import ResourceRouter
 
@@ -24,24 +24,29 @@ class JALinks(BaseModel):
 
     self: Optional[str]
     # Will be used when relationship endpoints are implemented
-    # related: Optional[str] = None
+    related: Optional[str]
 
 
-class JAResource(GenericModel, Generic[TRead, TName]):
+class JARelationshipsObject(BaseModel):
+    links: list[JALinks]
+
+
+class JAResourceObject(GenericModel, Generic[TRead, TName]):
     id: str
     type: TName
     attributes: TRead
     links: JALinks
+    relationships: JARelationshipsObject
 
 
 class JAResponseSingle(GenericModel, Generic[TRead, TName, TIncluded]):
-    data: JAResource[TRead, TName]
+    data: JAResourceObject[TRead, TName]
     included: TIncluded
     links: JALinks
 
 
 class JAResponseList(GenericModel, Generic[TRead, TName, TIncluded]):
-    data: List[JAResource[TRead, TName]]
+    data: List[JAResourceObject[TRead, TName]]
     included: TIncluded
     links: JALinks
 
@@ -89,7 +94,7 @@ class JSONAPIResourceRouter(ResourceRouter):
         schemas = get_schemas_from_relationships(relationships=relationships)
 
         return tuple(
-            JAResource[
+            JAResourceObject[
                 schema,
                 Literal[(self.resource_class.registry[schema].name,)],
             ]
@@ -129,8 +134,43 @@ class JSONAPIResourceRouter(ResourceRouter):
 
         return JALinks(self=path)
 
-    def build_resource_links(self, id: str, resource: Union[Type[Resource], Resource]):
+    def build_resource_object_links(
+        self, id: str, resource: Union[Type[Resource], Resource]
+    ):
         return JALinks(self=f"/{resource.plural_name}/{id}")
+
+    def build_resource_object_relationships(
+        self, id: str, resource: Union[Type[Resource], Resource]
+    ):
+        """
+        links:
+            self: a relationship link, e.g. /stars/123/relationships/planets
+            related: /stars/123/planets
+        data: [
+            {
+                type: planet
+                id: 1
+            },
+            {
+                type: planet
+                id: 2
+            },
+        ]
+
+        """
+        links = []
+
+        for relationship_name in resource.get_relationships():
+            links.append(
+                JALinks(
+                    self=f"/{resource.plural_name}/{id}/relationships/{relationship_name}",
+                    related=f"/{resource.plural_name}/{id}/{relationship_name}",
+                )
+            )
+
+        # If the relationship is to-one, then we can include `data`
+        # But for to-many, we only include it if it's in inclusions.
+        return JARelationshipsObject(links=links)
 
     def build_response(
         self,
@@ -151,21 +191,29 @@ class JSONAPIResourceRouter(ResourceRouter):
                     obj = selected_obj.obj
                     related_resource = selected_obj.resource
 
-                    included_resources[(related_resource.name, obj.id)] = JAResource(
+                    included_resources[
+                        (related_resource.name, obj.id)
+                    ] = JAResourceObject(
                         id=obj.id,
                         type=related_resource.name,
                         attributes=related_resource.Read.from_orm(obj),
-                        links=self.build_resource_links(
+                        links=self.build_resource_object_links(
+                            id=obj.id, resource=related_resource
+                        ),
+                        relationships=self.build_resource_object_relationships(
                             id=obj.id, resource=related_resource
                         ),
                     )
 
         data = [
-            JAResource(
+            JAResourceObject(
                 id=row.id,
                 attributes=row,
                 type=resource.name,
-                links=self.build_resource_links(id=row.id, resource=resource),
+                links=self.build_resource_object_links(id=row.id, resource=resource),
+                relationships=self.build_resource_object_relationships(
+                    id=row.id, resource=resource
+                ),
             )
             for row in rows
         ]

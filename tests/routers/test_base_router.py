@@ -6,8 +6,8 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from pydantic.generics import GenericModel
 
-from fastapi_rest_framework import routers
-from fastapi_rest_framework.routers import decorators
+from fastapi_resources import routers
+from fastapi_resources.routers import decorators
 from tests.routers import in_memory_resource
 from tests.routers.models import (
     Galaxy,

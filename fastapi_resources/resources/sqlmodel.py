@@ -11,7 +11,7 @@ from sqlalchemy.orm import joinedload
 from sqlmodel import Session, SQLModel, select
 from sqlmodel.sql.expression import SelectOfScalar
 
-from fastapi_rest_framework.resources import base_resource, types
+from fastapi_resources.resources import base_resource, types
 
 
 @dataclass

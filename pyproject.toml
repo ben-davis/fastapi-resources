@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "fastapi-rest-framework"
+name = "fastapi-resources"
 version = "0.1.0"
 description = ""
 authors = ["Ben Davis <ben@bencdavis.com>"]
 packages = [
-    { include = "fastapi_rest_framework" }
+    { include = "fastapi_resources" }
 ]
 
 [tool.poetry.dependencies]
