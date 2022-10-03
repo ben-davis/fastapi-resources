@@ -39,7 +39,7 @@ class JALinks(BaseModel):
 
 class JAResourceIdentifierObject(GenericModel, Generic[TType]):
     type: TType
-    id: Optional[str]
+    id: str
 
 
 class JARelationshipsObjectSingle(GenericModel, Generic[TType]):
@@ -49,7 +49,7 @@ class JARelationshipsObjectSingle(GenericModel, Generic[TType]):
 
 class JARelationshipsObjectMany(GenericModel, Generic[TType]):
     links: JALinks
-    data: Optional[JAResourceIdentifierObject[TType]]
+    data: list[JAResourceIdentifierObject[TType]]
 
 
 class JAResourceObject(GenericModel, Generic[TAttributes, TRelationships, TName]):
@@ -122,9 +122,9 @@ def get_relationships_schema_for_resource_class(
                 f"{Read.__name__}__{method}__Relationships{relationship_name}",
                 __base__=(
                     (
-                        JARelationshipsObjectSingle
+                        JARelationshipsObjectMany
                         if relationship_info.many
-                        else JARelationshipsObjectMany,
+                        else JARelationshipsObjectSingle,
                         Generic[TType],
                     )
                 ),
@@ -281,9 +281,7 @@ class JSONAPIResourceRouter(ResourceRouter):
             id=related_obj.id,
         )
 
-    def build_resource_object_relationships(
-        self, obj: Object, resource: Resource
-    ) -> list:
+    def build_resource_object_relationships(self, obj: Object, resource: Resource):
         relationships = {}
 
         for (
@@ -305,12 +303,17 @@ class JSONAPIResourceRouter(ResourceRouter):
                 )
                 for related_obj in resource.get_related(obj, [relationship_name])
             ]
-            print(relationship_name, relationship_info.many, data)
+
+            JARelationshipObject = (
+                JARelationshipsObjectMany
+                if relationship_info.many
+                else JARelationshipsObjectSingle
+            )
 
             if not relationship_info.many:
                 data = data[0] if data else None
 
-            relationships[relationship_name] = JARelationshipsObject(
+            relationships[relationship_name] = JARelationshipObject(
                 links=links,
                 data=data,
             )
