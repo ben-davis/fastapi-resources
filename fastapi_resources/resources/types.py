@@ -1,4 +1,4 @@
-from typing import Callable, ClassVar, List, Optional, Protocol, Type
+from typing import Callable, ClassVar, List, Optional, Protocol, Set, Type
 
 from fastapi import Request
 from pydantic.main import BaseModel
@@ -35,6 +35,15 @@ class ResourceProtocol(Protocol):
     def get_relationships(
         cls,
     ) -> dict[str, RelationshipProtocol]:
+        ...
+
+    @classmethod
+    def get_attributes(cls) -> Set[str]:
+        """Get the non-relationships attributes for the resource.
+
+        The attributes that end up in the response depend on those specified in
+        the Read schema; it'll be a subset of those returned here.
+        """
         ...
 
     def get_related(self, obj: BaseModel, inclusion: List[str]) -> List[BaseModel]:

@@ -1,10 +1,9 @@
 from typing import List, Optional
 
 from fastapi import FastAPI, Request
-from sqlmodel import Field, Relationship, SQLModel, create_engine
-
 from fastapi_resources import resources, routers
 from fastapi_resources.routers import decorators
+from sqlmodel import Field, Relationship, SQLModel, create_engine
 
 sqlite_file_name = "database.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
@@ -123,7 +122,7 @@ class GalaxyResource(resources.SQLModelResource[Galaxy]):
     Update = GalaxyUpdate
 
 
-class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
+class GalaxyResourceRouter(routers.JSONAPIResourceRouter):
     resource_class = GalaxyResource
 
     @decorators.action(detail=False)
@@ -138,7 +137,7 @@ class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
         return obj
 
 
-galaxy = GalaxyResourceRouter(tags=["Galaxies"])
+galaxy = GalaxyResourceRouter(resource_class=GalaxyResource, tags=["Galaxies"])
 star = routers.JSONAPIResourceRouter(resource_class=StarResource, tags=["Stars"])
 planet = routers.JSONAPIResourceRouter(resource_class=PlanetResource, tags=["Planets"])
 

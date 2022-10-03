@@ -2,10 +2,13 @@ from copy import copy
 from typing import Optional
 
 from fastapi.exceptions import HTTPException
-from sqlmodel.main import SQLModel
-
 from fastapi_resources.resources import types
-from fastapi_resources.resources.sqlmodel import SelectedObj, SQLModelResource
+from fastapi_resources.resources.sqlmodel import (
+    Relationships,
+    SelectedObj,
+    SQLModelResource,
+)
+from sqlmodel.main import SQLModel
 
 id_counter = 1
 test_db: dict[str, dict[int, SQLModel]] = {}
@@ -26,33 +29,54 @@ class InMemorySQLModelResource(SQLModelResource):
     def get_related(self, obj: SQLModel, inclusion: list[str]):
         """Only supports to-one relationships."""
 
-        def select_inclusion(obj: SQLModel, inclusion: list[str]) -> list[SelectedObj]:
-            next_inclusion = copy(inclusion)
+        def select_objs(
+            _obj: SQLModel, _inclusion: list[str], _relationships: Relationships
+        ) -> list[SelectedObj]:
+            next_inclusion = copy(_inclusion)
             field = next_inclusion.pop(0)
+            relationship_info = _relationships[field]
+            schema = relationship_info.schema_with_relationships.schema
+            related_resource = self.registry[schema]
 
-            # Assumes the related object is just the field with _id suffix
-            related_id = getattr(obj, f"{field}_id")
-            if not related_id:
-                return []
+            if relationship_info.many:
+                related_resource_name = self.registry[schema].name
 
-            selected_obj = test_db[field][related_id]
-            resource = self.registry[type(selected_obj)]
-            selected_objs = [SelectedObj(obj=selected_obj, resource=resource)]
+                selected_objs = [
+                    SelectedObj(obj=related_obj, resource=related_resource)
+                    for related_obj in test_db[related_resource_name].values()
+                    if getattr(related_obj, f"{self.name}_id", "") == obj.id
+                ]
+                print(selected_objs)
+            else:
+                # Assumes the related object is just the field with _id suffix
+                related_id = getattr(_obj, f"{field}_id", None)
+                if not related_id:
+                    return []
+
+                selected_obj = test_db[field][related_id]
+                selected_objs = [
+                    SelectedObj(obj=selected_obj, resource=related_resource)
+                ]
 
             if next_inclusion:
                 selected_objs = [
-                    selected_obj,
+                    *selected_objs,
                     *[
                         nested_obj
-                        for nested_obj in select_inclusion(
-                            obj=selected_obj, inclusion=next_inclusion
+                        for selected_obj in selected_objs
+                        for nested_obj in select_objs(
+                            _obj=selected_obj.obj,
+                            _inclusion=next_inclusion,
+                            _relationships=relationship_info.schema_with_relationships.relationships,
                         )
                     ],
                 ]
 
             return selected_objs
 
-        return select_inclusion(obj=obj, inclusion=inclusion)
+        return select_objs(
+            _obj=obj, _inclusion=inclusion, _relationships=self.get_relationships()
+        )
 
     def create(self, model: SQLModel):
         global id_counter

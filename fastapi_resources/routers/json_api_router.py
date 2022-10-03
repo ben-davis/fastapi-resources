@@ -1,18 +1,28 @@
 from typing import Generic, List, Literal, Optional, Type, TypeVar, Union
 
 from fastapi import Query, Request
-from pydantic.generics import GenericModel
-from pydantic.main import BaseModel
-
-from fastapi_resources.resources.base_resource import Relationships, Resource
+from fastapi_resources.resources.base_resource import (
+    Object,
+    Relationships,
+    Resource,
+    SQLModelRelationshipInfo,
+)
 from fastapi_resources.resources.types import Inclusions
 from fastapi_resources.routers import base_router
+from pydantic import create_model
+from pydantic.generics import GenericModel
+from pydantic.main import BaseModel, ModelMetaclass
 
 from .base_router import ResourceRouter
 
-TRead = TypeVar("TRead", bound=BaseModel)
+TRead = TypeVar("TRead", bound=Object)
 TName = TypeVar("TName", bound=str)
+TUpdate = TypeVar("TUpdate", bound=Object)
+TCreate = TypeVar("TCreate", bound=Object)
+TAttributes = TypeVar("TAttributes")
+TRelationships = TypeVar("TRelationships")
 TIncluded = TypeVar("TIncluded")
+TType = TypeVar("TType")
 
 
 class TIncludeParam(str):
@@ -27,26 +37,52 @@ class JALinks(BaseModel):
     related: Optional[str]
 
 
-class JARelationshipsObject(BaseModel):
-    links: list[JALinks]
+class JAResourceIdentifierObject(GenericModel, Generic[TType]):
+    type: TType
+    id: Optional[str]
 
 
-class JAResourceObject(GenericModel, Generic[TRead, TName]):
+class JARelationshipsObjectSingle(GenericModel, Generic[TType]):
+    links: JALinks
+    data: Optional[JAResourceIdentifierObject[TType]]
+
+
+class JARelationshipsObjectMany(GenericModel, Generic[TType]):
+    links: JALinks
+    data: Optional[JAResourceIdentifierObject[TType]]
+
+
+class JAResourceObject(GenericModel, Generic[TAttributes, TRelationships, TName]):
     id: str
     type: TName
-    attributes: TRead
+    attributes: TAttributes
     links: JALinks
-    relationships: JARelationshipsObject
+    relationships: TRelationships
 
 
-class JAResponseSingle(GenericModel, Generic[TRead, TName, TIncluded]):
-    data: JAResourceObject[TRead, TName]
+class JAUpdateObject(GenericModel, Generic[TAttributes, TRelationships, TName]):
+    id: str
+    type: TName
+    attributes: Optional[TAttributes]
+    relationships: Optional[TRelationships]
+
+
+class JAUpdateRequest(GenericModel, Generic[TAttributes, TRelationships, TName]):
+    data: JAUpdateObject[TAttributes, TRelationships, TName]
+
+
+class JAResponseSingle(
+    GenericModel, Generic[TAttributes, TRelationships, TName, TIncluded]
+):
+    data: JAResourceObject[TAttributes, TRelationships, TName]
     included: TIncluded
     links: JALinks
 
 
-class JAResponseList(GenericModel, Generic[TRead, TName, TIncluded]):
-    data: List[JAResourceObject[TRead, TName]]
+class JAResponseList(
+    GenericModel, Generic[TAttributes, TRelationships, TName, TIncluded]
+):
+    data: List[JAResourceObject[TAttributes, TRelationships, TName]]
     included: TIncluded
     links: JALinks
 
@@ -55,9 +91,10 @@ include_query = Query(None, regex=r"^([\w\.]+)(,[\w\.]+)*$")
 
 
 def get_schemas_from_relationships(
-    relationships: Relationships, visited: set[type[BaseModel]] = None
-):
-    schemas = []
+    relationships: Relationships, visited: Optional[set[type[Object]]] = None
+) -> list[tuple[str, ModelMetaclass]]:
+    schemas: list[tuple[str, ModelMetaclass]] = []
+
     visited = visited or set()
     for relationship_info in relationships.values():
         schema = relationship_info.schema_with_relationships.schema
@@ -65,13 +102,78 @@ def get_schemas_from_relationships(
             continue
 
         visited.add(schema)
-        schemas.append(schema)
+        schemas.append((relationship_info.field, schema))
         schemas += get_schemas_from_relationships(
             relationships=relationship_info.schema_with_relationships.relationships,
             visited=visited,
         )
 
     return schemas
+
+
+def get_relationships_schema_for_resource_class(
+    method: str, resource_class: type[Resource]
+):
+    Read = resource_class.Read
+
+    RelationshipLinkages = {
+        relationship_name: (
+            create_model(
+                f"{Read.__name__}__{method}__Relationships{relationship_name}",
+                __base__=(
+                    (
+                        JARelationshipsObjectSingle
+                        if relationship_info.many
+                        else JARelationshipsObjectMany,
+                        Generic[TType],
+                    )
+                ),
+            )[
+                Literal[
+                    resource_class.registry[
+                        relationship_info.schema_with_relationships.schema
+                    ].name
+                ]
+            ],
+            ...,
+        )
+        for relationship_name, relationship_info in resource_class.get_relationships().items()
+    }
+
+    Relationships = create_model(
+        f"{Read.__name__}__{method}__Relationships",
+        **RelationshipLinkages,
+        __base__=BaseModel,
+    )
+
+    return Relationships
+
+
+def get_attributes_model_for_resource_class(
+    method: str, resource_class: type[Resource]
+):
+    Read = resource_class.Read
+    Attributes = create_model(f"{Read.__name__}__{method}__Attributes", __base__=Read)
+
+    # Remove the ID
+    del Attributes.__fields__["id"]
+
+    return Attributes
+
+
+def get_model_for_resource_class(method: str, resource_class: type[Resource]):
+    Attributes = get_attributes_model_for_resource_class(
+        method=method, resource_class=resource_class
+    )
+    Relationships = get_relationships_schema_for_resource_class(
+        method=method, resource_class=resource_class
+    )
+
+    return JAResourceObject[
+        Attributes,
+        Relationships,
+        Literal[(resource_class.name,)],  # type: ignore
+    ]
 
 
 class JSONAPIResourceRouter(ResourceRouter):
@@ -89,33 +191,57 @@ class JSONAPIResourceRouter(ResourceRouter):
             **kwargs,
         )
 
-    def get_included_schema(self) -> tuple[type[BaseModel], ...]:
+    def get_included_schema(self, method: str) -> tuple[type[JAResourceObject], ...]:
         relationships = self.resource_class.get_relationships()
         schemas = get_schemas_from_relationships(relationships=relationships)
 
         return tuple(
-            JAResourceObject[
-                schema,
-                Literal[(self.resource_class.registry[schema].name,)],
-            ]
-            for schema in schemas
+            get_model_for_resource_class(
+                method=f"{self.prefix}__{method}__included__{field}__{schema.__name__}",
+                resource_class=self.resource_class.registry[schema],
+            )
+            for field, schema in schemas
         )
 
     def get_read_response_model(self):
-        included_schemas = self.get_included_schema()
-        Included = List[Union[included_schemas]] if included_schemas else list
-        Read = self.resource_class.Read
-        Name = Literal[(self.resource_class.name,)]
+        included_schemas = self.get_included_schema(method="retrieve")
+        Included = List[Union[included_schemas]] if included_schemas else list  # type: ignore
+        Name = Literal[(self.resource_class.name,)]  # type: ignore
 
-        return JAResponseSingle[Read, Name, Included]
+        Attributes = get_attributes_model_for_resource_class(
+            method="retrieve", resource_class=self.resource_class
+        )
+        Relationships = get_relationships_schema_for_resource_class(
+            method="retrieve", resource_class=self.resource_class
+        )
+
+        return JAResponseSingle[Attributes, Relationships, Name, Included]
 
     def get_list_response_model(self):
-        included_schemas = self.get_included_schema()
-        Included = List[Union[included_schemas]] if included_schemas else list
-        Read = self.resource_class.Read
-        Name = Literal[(self.resource_class.name,)]
+        included_schemas = self.get_included_schema(method="list")
+        Included = List[Union[included_schemas]] if included_schemas else list  # type: ignore
+        Name = Literal[(self.resource_class.name,)]  # type: ignore
 
-        return JAResponseList[Read, Name, Included]
+        Attributes = get_attributes_model_for_resource_class(
+            method="list", resource_class=self.resource_class
+        )
+        Relationships = get_relationships_schema_for_resource_class(
+            method="list", resource_class=self.resource_class
+        )
+
+        return JAResponseList[Attributes, Relationships, Name, Included]
+
+    def get_update_model(self):
+        Name = Literal[(self.resource_class.name,)]  # type: ignore
+
+        Attributes = get_attributes_model_for_resource_class(
+            method="update", resource_class=self.resource_class
+        )
+        Relationships = get_relationships_schema_for_resource_class(
+            method="update", resource_class=self.resource_class
+        )
+
+        return JAUpdateRequest[Attributes, Relationships, Name]
 
     def get_resource(self, request: Request):
         inclusions: Inclusions = []
@@ -139,42 +265,88 @@ class JSONAPIResourceRouter(ResourceRouter):
     ):
         return JALinks(self=f"/{resource.plural_name}/{id}")
 
+    def build_resource_identifier_object(
+        self,
+        related_obj: Optional[Object],
+        resource: Union[Type[Resource], Resource],
+        relationship_info: SQLModelRelationshipInfo,
+    ) -> Optional[JAResourceIdentifierObject]:
+        if not related_obj:
+            return None
+
+        return JAResourceIdentifierObject(
+            type=resource.registry[
+                relationship_info.schema_with_relationships.schema
+            ].name,
+            id=related_obj.id,
+        )
+
     def build_resource_object_relationships(
-        self, id: str, resource: Union[Type[Resource], Resource]
-    ):
-        """
-        links:
-            self: a relationship link, e.g. /stars/123/relationships/planets
-            related: /stars/123/planets
-        data: [
-            {
-                type: planet
-                id: 1
-            },
-            {
-                type: planet
-                id: 2
-            },
-        ]
+        self, obj: Object, resource: Resource
+    ) -> list:
+        relationships = {}
 
-        """
-        links = []
+        for (
+            relationship_name,
+            relationship_info,
+        ) in resource.get_relationships().items():
+            links = JALinks(
+                self=f"/{resource.plural_name}/{obj.id}/relationships/{relationship_name}",
+                related=f"/{resource.plural_name}/{obj.id}/{relationship_name}",
+            )
 
-        for relationship_name in resource.get_relationships():
-            links.append(
-                JALinks(
-                    self=f"/{resource.plural_name}/{id}/relationships/{relationship_name}",
-                    related=f"/{resource.plural_name}/{id}/{relationship_name}",
+            # The relationships will have been properly selected, so this should not send
+            # another query.
+            data = [
+                self.build_resource_identifier_object(
+                    related_obj=related_obj.obj,
+                    resource=resource,
+                    relationship_info=relationship_info,
                 )
+                for related_obj in resource.get_related(obj, [relationship_name])
+            ]
+            print(relationship_name, relationship_info.many, data)
+
+            if not relationship_info.many:
+                data = data[0] if data else None
+
+            relationships[relationship_name] = JARelationshipsObject(
+                links=links,
+                data=data,
             )
 
         # If the relationship is to-one, then we can include `data`
         # But for to-many, we only include it if it's in inclusions.
-        return JARelationshipsObject(links=links)
+        return relationships
+
+    def build_resource_object(self, obj: Object, resource: Resource):
+        valid_attributes = resource.get_attributes()
+
+        # ID is a special case, so can ignored
+        valid_attributes.remove("id")
+
+        # Filter out relationships attributes
+        attributes = {
+            key: value
+            for key, value in resource.Read.from_orm(obj).dict().items()
+            if key in valid_attributes
+        }
+
+        resource_object = JAResourceObject(
+            id=obj.id,
+            type=resource.name,
+            attributes=attributes,
+            links=self.build_resource_object_links(id=obj.id, resource=resource),
+            relationships=self.build_resource_object_relationships(
+                obj=obj, resource=resource
+            ),
+        )
+
+        return resource_object
 
     def build_response(
         self,
-        rows: Union[BaseModel, list[BaseModel]],
+        rows: Union[Object, list[Object]],
         resource: Resource,
         request: Request,
     ):
@@ -193,35 +365,15 @@ class JSONAPIResourceRouter(ResourceRouter):
 
                     included_resources[
                         (related_resource.name, obj.id)
-                    ] = JAResourceObject(
-                        id=obj.id,
-                        type=related_resource.name,
-                        attributes=related_resource.Read.from_orm(obj),
-                        links=self.build_resource_object_links(
-                            id=obj.id, resource=related_resource
-                        ),
-                        relationships=self.build_resource_object_relationships(
-                            id=obj.id, resource=related_resource
-                        ),
-                    )
+                    ] = self.build_resource_object(obj=obj, resource=related_resource())
 
-        data = [
-            JAResourceObject(
-                id=row.id,
-                attributes=row,
-                type=resource.name,
-                links=self.build_resource_object_links(id=row.id, resource=resource),
-                relationships=self.build_resource_object_relationships(
-                    id=row.id, resource=resource
-                ),
-            )
-            for row in rows
-        ]
+        data = [self.build_resource_object(obj=row, resource=resource) for row in rows]
         data = data if many else data[0]
-        ResponseSchema = JAResponseList if many else JAResponseSingle
 
         # Get top-level resource links
         links = self.build_document_links(request=request)
+
+        ResponseSchema = JAResponseList if many else JAResponseSingle
 
         return ResponseSchema(
             data=data, included=list(included_resources.values()), links=links
@@ -256,6 +408,7 @@ class JSONAPIResourceRouter(ResourceRouter):
         request: Request,
         include: Optional[str] = include_query,
     ):
+        print("YUPDATE", update)
         return super()._update(id=id, update=update, request=request)
 
     def _delete(self, *, id: Union[int, str], request: Request):

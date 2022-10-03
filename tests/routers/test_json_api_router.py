@@ -4,8 +4,13 @@ from fastapi.testclient import TestClient
 from fastapi_resources import routers
 from tests.resources.sqlmodel_models import Planet
 from tests.routers import in_memory_resource
-from tests.routers.models import (Galaxy, GalaxyResource, PlanetResource, Star,
-                                  StarResource)
+from tests.routers.models import (
+    Galaxy,
+    GalaxyResource,
+    PlanetResource,
+    Star,
+    StarResource,
+)
 
 app = FastAPI()
 
@@ -33,7 +38,10 @@ class TestRetrieve:
     def test_retrieve(self):
         star = Star(name="Sirius")
         star.id = 1
+        planet = Planet(name="Earth", star_id=1)
+        planet.id = 1
 
+        in_memory_resource.test_db["planet"][planet.id] = planet
         in_memory_resource.test_db["star"][star.id] = star
 
         response = client.get(f"/stars/{star.id}")
@@ -41,13 +49,18 @@ class TestRetrieve:
         assert response.status_code == 200
         assert response.json() == {
             "data": {
-                "attributes": {"id": 1, "name": "Sirius"},
                 "id": "1",
                 "type": "star",
+                "attributes": {"name": "Sirius"},
                 "links": {"self": "/stars/1"},
                 "relationships": {
                     "planets": {
-                        "data": [],
+                        "data": [
+                            {
+                                "type": "planet",
+                                "id": "1",
+                            }
+                        ],
                         "links": {
                             "related": "/stars/1/planets",
                             "self": "/stars/1/relationships/planets",
@@ -58,8 +71,8 @@ class TestRetrieve:
                         "links": {
                             "related": "/stars/1/galaxy",
                             "self": "/stars/1/relationships/galaxy",
-                        }
-                    }
+                        },
+                    },
                 },
             },
             "included": [],
@@ -87,24 +100,42 @@ class TestRetrieve:
                 "type": "planet",
                 "relationships": {
                     "star": {
-                        "data": {
-                            "type": "star",
-                            "id": "1"
-                        },
+                        "data": {"type": "star", "id": "1"},
                         "links": {
                             "related": "/planets/1/star",
                             "self": "/planets/1/relationships/star",
-                        }
+                        },
                     }
                 },
                 "links": {"self": "/planets/1"},
             },
             "included": [
                 {
-                    "attributes": {"id": 1, "name": "Sun", "galaxy_id": None},
+                    "attributes": {"name": "Sun"},
                     "id": "1",
                     "type": "star",
                     "links": {"self": "/stars/1"},
+                    "relationships": {
+                        "galaxy": {
+                            "data": None,
+                            "links": {
+                                "related": "/stars/1/galaxy",
+                                "self": "/stars/1/relationships/galaxy",
+                            },
+                        },
+                        "planets": {
+                            "data": [
+                                {
+                                    "type": "planet",
+                                    "id": "1",
+                                }
+                            ],
+                            "links": {
+                                "related": "/stars/1/planets",
+                                "self": "/stars/1/relationships/planets",
+                            },
+                        },
+                    },
                 }
             ],
             "links": {"self": "/planets/1?include=star"},
@@ -124,10 +155,26 @@ class TestList:
         assert response.json() == {
             "data": [
                 {
-                    "attributes": {"id": 1, "name": "Sirius", "galaxy_id": None},
+                    "attributes": {"name": "Sirius"},
                     "id": "1",
                     "type": "star",
                     "links": {"self": "/stars/1"},
+                    "relationships": {
+                        "galaxy": {
+                            "data": None,
+                            "links": {
+                                "related": "/stars/1/galaxy",
+                                "self": "/stars/1/relationships/galaxy",
+                            },
+                        },
+                        "planets": {
+                            "data": [],
+                            "links": {
+                                "related": "/stars/1/planets",
+                                "self": "/stars/1/relationships/planets",
+                            },
+                        },
+                    },
                 }
             ],
             "included": [],
@@ -156,31 +203,61 @@ class TestList:
             "data": [
                 {
                     "attributes": {
-                        "id": 1,
                         "name": "Earth",
-                        "star_id": 1,
                     },
                     "id": "1",
                     "type": "planet",
                     "links": {"self": "/planets/1"},
+                    "relationships": {
+                        "star": {
+                            "data": {"id": "1", "type": "star"},
+                            "links": {
+                                "related": "/planets/1/star",
+                                "self": "/planets/1/relationships/star",
+                            },
+                        },
+                    },
                 },
                 {
                     "attributes": {
-                        "id": 2,
                         "name": "Hoth",
-                        "star_id": None,
                     },
                     "id": "2",
                     "type": "planet",
                     "links": {"self": "/planets/2"},
+                    "relationships": {
+                        "star": {
+                            "data": None,
+                            "links": {
+                                "related": "/planets/2/star",
+                                "self": "/planets/2/relationships/star",
+                            },
+                        },
+                    },
                 },
             ],
             "included": [
                 {
-                    "attributes": {"id": 1, "name": "Sun", "galaxy_id": 1},
+                    "attributes": {"name": "Sun"},
                     "id": "1",
                     "type": "star",
                     "links": {"self": "/stars/1"},
+                    "relationships": {
+                        "galaxy": {
+                            "data": {"type": "galaxy", "id": "1"},
+                            "links": {
+                                "related": "/stars/1/galaxy",
+                                "self": "/stars/1/relationships/galaxy",
+                            },
+                        },
+                        "planets": {
+                            "data": [{"type": "planet", "id": "1"}],
+                            "links": {
+                                "related": "/stars/1/planets",
+                                "self": "/stars/1/relationships/planets",
+                            },
+                        },
+                    },
                 }
             ],
             "links": {"self": "/planets?include=star"},
@@ -194,15 +271,44 @@ class TestUpdate:
 
         in_memory_resource.test_db["star"][star.id] = star
 
-        response = client.patch(f"/stars/{star.id}", json={"name": "Vega"})
+        # TODO: Correct the patch
+        response = client.patch(
+            f"/stars/{star.id}",
+            json={
+                "data": {
+                    "type": "star",
+                    "id": star.id,
+                    "attributes": {
+                        "name": "Vega",
+                    },
+                }
+            },
+        )
 
+        assert response.json() == ""
         assert response.status_code == 200
         assert response.json() == {
             "data": {
-                "attributes": {"id": 1, "name": "Vega", "galaxy_id": None},
+                "attributes": {"name": "Vega"},
                 "id": "1",
                 "type": "star",
                 "links": {"self": "/stars/1"},
+                "relationships": {
+                    "galaxy": {
+                        "data": None,
+                        "links": {
+                            "related": "/stars/1/galaxy",
+                            "self": "/stars/1/relationships/galaxy",
+                        },
+                    },
+                    "planets": {
+                        "data": [],
+                        "links": {
+                            "related": "/stars/1/planets",
+                            "self": "/stars/1/relationships/planets",
+                        },
+                    },
+                },
             },
             "included": [],
             "links": {"self": "/stars/1"},
@@ -218,10 +324,26 @@ class TestCreate:
         assert response.status_code == 201
         assert response.json() == {
             "data": {
-                "attributes": {"id": 1, "name": "Vega", "galaxy_id": None},
+                "attributes": {"name": "Vega"},
                 "id": "1",
                 "type": "star",
                 "links": {"self": "/stars/1"},
+                "relationships": {
+                    "galaxy": {
+                        "data": None,
+                        "links": {
+                            "related": "/stars/1/galaxy",
+                            "self": "/stars/1/relationships/galaxy",
+                        },
+                    },
+                    "planets": {
+                        "data": [],
+                        "links": {
+                            "related": "/stars/1/planets",
+                            "self": "/stars/1/relationships/planets",
+                        },
+                    },
+                },
             },
             "included": [],
             "links": {"self": "/stars"},

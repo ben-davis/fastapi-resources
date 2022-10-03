@@ -66,10 +66,16 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         Read = self.resource_class.Read
         return List[Read]
 
+    def get_update_model(self):
+        return self.resource_class.Update
+
+    def get_create_model(self):
+        return self.resource_class.Create
+
     def get_method_replacements(self):
         return {
-            "_create": {TCreatePayload: self.resource_class.Create},
-            "_update": {TUpdatePayload: self.resource_class.Update},
+            "_create": {TCreatePayload: self.get_create_model()},
+            "_update": {TUpdatePayload: self.get_update_model()},
         }
 
     def _patch_route_types(self):

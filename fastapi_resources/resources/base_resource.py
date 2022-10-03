@@ -1,15 +1,19 @@
 from copy import copy
 from dataclasses import dataclass
-from typing import ClassVar, Optional, Type
+from typing import Optional, Type
 
 from pydantic.main import BaseModel
 
 from .types import Inclusions, ResourceProtocol
 
 
+class Object(BaseModel):
+    id: str
+
+
 @dataclass
 class SchemaWithRelationships:
-    schema: Type[BaseModel]
+    schema: Type[Object]
     relationships: "Relationships"
 
 
@@ -20,12 +24,13 @@ class SQLModelRelationshipInfo:
     field: str
 
 
+# TODO: This needs to not be a SQLModel type
 Relationships = dict[str, SQLModelRelationshipInfo]
 
 
 @dataclass
 class SelectedObj:
-    obj: BaseModel
+    obj: Object
     resource: Type["Resource"]
 
 
@@ -39,7 +44,7 @@ class Resource(ResourceProtocol):
     # name: ClassVar[str]
     # plural_name: ClassVar[Optional[str]]
 
-    registry: dict[Type[BaseModel], type["Resource"]] = {}
+    registry: dict[Type[Object], type["Resource"]] = {}
 
     def __init_subclass__(cls) -> None:
         if Db := getattr(cls, "Db", None):
@@ -109,5 +114,9 @@ class Resource(ResourceProtocol):
     def get_relationships(cls) -> Relationships:
         return {}
 
-    def get_related(self, obj: BaseModel, inclusion: list[str]) -> list[SelectedObj]:
+    @classmethod
+    def get_attributes(cls) -> set[str]:
+        return set(cls.Db.__fields__.keys())
+
+    def get_related(self, obj: Object, inclusion: list[str]) -> list[SelectedObj]:
         raise NotImplementedError()

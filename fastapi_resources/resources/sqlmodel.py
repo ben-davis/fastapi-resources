@@ -5,13 +5,12 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Generic, Optional, Protocol, Type, TypeVar
 
 from fastapi import HTTPException
+from fastapi_resources.resources import base_resource, types
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import exc as sa_exceptions
 from sqlalchemy.orm import joinedload
 from sqlmodel import Session, SQLModel, select
 from sqlmodel.sql.expression import SelectOfScalar
-
-from fastapi_resources.resources import base_resource, types
 
 
 @dataclass
@@ -54,6 +53,16 @@ class SQLResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
     def get_relationships(
         cls,
     ) -> dict[str, SQLModelRelationshipInfo]:
+        """Get the relationships for the resource."""
+        ...
+
+    @classmethod
+    def get_attributes(cls) -> set[str]:
+        """Get the non-relationships attributes for the resource.
+
+        The attributes that end up in the response depend on those specified in
+        the Read schema; it'll be a subset of those returned here.
+        """
         ...
 
     def get_related(self, obj: SQLModel, inclusion: list[str]) -> list[SQLModel]:
@@ -197,6 +206,22 @@ class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[
           - To retrieve all the objects along an inclusion with their schemas
         """
         return get_relationships_from_schema(schema=cls.Db)
+
+    @classmethod
+    def get_attributes(cls) -> set[str]:
+        attributes = set()
+
+        # These are the fields according to the pydantic model
+        fields = cls.Db.__fields__
+        for field in fields:
+            # If the field refers to a foreign key field we skip it as it'll be
+            # included in get_relationships.
+            if getattr(cls.Db, field).expressions[0].foreign_keys:
+                continue
+
+            attributes.add(field)
+
+        return attributes
 
     def get_select(self):
         options = []
