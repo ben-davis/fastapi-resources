@@ -1,13 +1,12 @@
 from typing import List, Optional
 
+from fastapi_resources.resources import SQLModelResource
 from sqlalchemy.orm import registry as sa_registry
 from sqlmodel import Field, Relationship, SQLModel, create_engine
 
-from fastapi_resources.resources import SQLModelResource
-
 registry = sa_registry()
 
-sqlite_url = f"sqlite://"
+sqlite_url = "sqlite://"
 engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
 
 
@@ -39,6 +38,7 @@ class PlanetUpdate(SQLModel, registry=registry):
 
 class StarBase(SQLModel, registry=registry):
     name: str
+    brightness: int = 1
 
     galaxy_id: Optional[int] = Field(default=None, foreign_key="galaxy.id")
 
@@ -61,6 +61,7 @@ class StarRead(StarBase):
 
 class StarUpdate(SQLModel, registry=registry):
     name: Optional[str] = None
+    brightness: Optional[int] = None
 
 
 class GalaxyBase(SQLModel, registry=registry):

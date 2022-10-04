@@ -43,12 +43,12 @@ class JAResourceIdentifierObject(GenericModel, Generic[TType]):
 
 
 class JARelationshipsObjectSingle(GenericModel, Generic[TType]):
-    links: JALinks
+    links: Optional[JALinks]
     data: Optional[JAResourceIdentifierObject[TType]]
 
 
 class JARelationshipsObjectMany(GenericModel, Generic[TType]):
-    links: JALinks
+    links: Optional[JALinks]
     data: list[JAResourceIdentifierObject[TType]]
 
 
@@ -118,24 +118,26 @@ def get_relationships_schema_for_resource_class(
 
     RelationshipLinkages = {
         relationship_name: (
-            create_model(
-                f"{Read.__name__}__{method}__Relationships{relationship_name}",
-                __base__=(
-                    (
-                        JARelationshipsObjectMany
-                        if relationship_info.many
-                        else JARelationshipsObjectSingle,
-                        Generic[TType],
-                    )
-                ),
-            )[
-                Literal[
-                    resource_class.registry[
-                        relationship_info.schema_with_relationships.schema
-                    ].name
+            Optional[
+                create_model(
+                    f"{Read.__name__}__{method}__Relationships{relationship_name}",
+                    __base__=(
+                        (
+                            JARelationshipsObjectMany
+                            if relationship_info.many
+                            else JARelationshipsObjectSingle,
+                            Generic[TType],
+                        )
+                    ),
+                )[
+                    Literal[
+                        resource_class.registry[
+                            relationship_info.schema_with_relationships.schema
+                        ].name
+                    ]
                 ]
             ],
-            ...,
+            None,
         )
         for relationship_name, relationship_info in resource_class.get_relationships().items()
     }
@@ -250,7 +252,9 @@ class JSONAPIResourceRouter(ResourceRouter):
         if include:
             inclusions = [inclusion.split(".") for inclusion in include.split(",")]
 
-        return self.resource_class(inclusions=inclusions)
+        return self.resource_class(
+            inclusions=inclusions, **self.get_resource_kwargs(request=request)
+        )
 
     def build_document_links(self, request: Request):
         path = request.url.path
@@ -328,6 +332,8 @@ class JSONAPIResourceRouter(ResourceRouter):
         # ID is a special case, so can ignored
         valid_attributes.remove("id")
 
+        print("YO", obj)
+
         # Filter out relationships attributes
         attributes = {
             key: value
@@ -382,6 +388,23 @@ class JSONAPIResourceRouter(ResourceRouter):
             data=data, included=list(included_resources.values()), links=links
         )
 
+    def parse_update(self, resource: Resource, update: dict):
+        # Merge the attributes and relationships into a single update
+        parsed_relationships = {}
+
+        for key, linkage in update["data"].get("relationships", {}).items():
+            identifiers = linkage["data"]
+            if isinstance(identifiers, list):
+                parsed_relationships[key] = [ro["id"] for ro in identifiers]
+            else:
+                parsed_relationships[key] = identifiers["id"]
+
+        merged_update = {
+            **update["data"].get("attributes", {}),
+            **parsed_relationships,
+        }
+        return super().parse_update(resource, merged_update)
+
     def _retrieve(
         self,
         *,
@@ -411,7 +434,6 @@ class JSONAPIResourceRouter(ResourceRouter):
         request: Request,
         include: Optional[str] = include_query,
     ):
-        print("YUPDATE", update)
         return super()._update(id=id, update=update, request=request)
 
     def _delete(self, *, id: Union[int, str], request: Request):

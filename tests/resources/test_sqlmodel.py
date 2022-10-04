@@ -135,27 +135,22 @@ class TestRelationships:
         galaxy = Galaxy(name="Milky Way")
         session.add(galaxy)
         session.commit()
-        session.refresh(galaxy)
 
         star = Star(name="Sun", galaxy_id=galaxy.id)
         session.add(star)
         session.commit()
-        session.refresh(star)
 
         andromeda = Galaxy(name="Andromeda")
         session.add(andromeda)
         session.commit()
-        session.refresh(andromeda)
 
         andromedae = Star(name="Andromedae", galaxy_id=galaxy.id)
         session.add(andromedae)
         session.commit()
-        session.refresh(andromedae)
 
         planet = Planet(name="Earth", star_id=star.id, favorite_galaxy_id=andromeda.id)
         session.add(planet)
         session.commit()
-        session.refresh(planet)
 
         related_objects = resource.get_related(
             obj=galaxy,
@@ -170,6 +165,29 @@ class TestRelationships:
         assert related_objects[2].resource == PlanetResource
         assert related_objects[3].obj == andromeda
         assert related_objects[3].resource == GalaxyResource
+
+    def test_get_related_works_for_empty_relationships(self, session: Session):
+        vega = Star(name="Vega")
+
+        star_resource = StarResource(
+            session=session,
+            inclusions=[],
+        )
+
+        session.add(vega)
+        session.commit()
+
+        related_objects = star_resource.get_related(
+            obj=vega,
+            inclusion=["planets"],
+        )
+        assert related_objects == []
+
+        related_objects = star_resource.get_related(
+            obj=vega,
+            inclusion=["galaxy"],
+        )
+        assert related_objects == []
 
 
 class TestRetrieve:
@@ -267,7 +285,7 @@ class TestUpdate:
 
         resource = StarResource(session=session)
         star_create = resource.update(
-            id=star.id, attributes=StarUpdate(name="Milky Way")
+            id=star.id, attributes=StarUpdate(name="Milky Way").dict(exclude_unset=True)
         )
 
         star_db = session.exec(select(Star).where(Star.id == star.id)).one()
@@ -285,7 +303,9 @@ class TestUpdate:
 
         resource = StarResource(session=session)
         star_create = resource.update(
-            id=star.id, attributes=StarUpdate(), name="Passed Manually"
+            id=star.id,
+            attributes=StarUpdate().dict(exclude_unset=True),
+            name="Passed Manually",
         )
 
         assert star_create.name == "Passed Manually"
@@ -319,8 +339,8 @@ class TestUpdate:
 
         star_create = resource.update(
             id=star.id,
-            attributes=StarUpdate(name="Milky Way"),
-            relationship_objects={
+            attributes=StarUpdate(name="Milky Way").dict(exclude_unset=True),
+            relationships={
                 "planets": [
                     earth.id,
                     mars.id,

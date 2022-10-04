@@ -11,10 +11,9 @@ from typing import (
 )
 
 from fastapi import APIRouter, Request, Response
-from pydantic import BaseModel
-
 from fastapi_resources.resources.base_resource import Resource
 from fastapi_resources.routers import decorators
+from pydantic import BaseModel
 
 
 class TCreatePayload(BaseModel):
@@ -184,7 +183,10 @@ class ResourceRouter(APIRouter, Generic[TResource]):
                 )(func)
 
     def get_resource(self, request: Request):
-        return self.resource_class()
+        return self.resource_class(**self.get_resource_kwargs(request=request))
+
+    def get_resource_kwargs(self, request: Request):
+        return {}
 
     def build_response(
         self,
@@ -193,6 +195,23 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         request: Request,
     ):
         return rows
+
+    def parse_update(
+        self,
+        resource: TResource,
+        update: dict,
+    ):
+        resource_relationships = resource.get_relationships()
+
+        relationships = {}
+
+        for field in list(update.keys()):
+            value = update[field]
+            if field in resource_relationships:
+                relationships[field] = value
+                del update[field]
+
+        return update, relationships
 
     def perform_create(
         self, request: Request, resource: TResource, create: TCreatePayload
@@ -207,12 +226,15 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         request: Request,
         resource: TResource,
         id: str | int,
-        update: TUpdatePayload,
+        attributes: dict,
+        relationships: dict,
     ):
         if not resource.update:
             raise NotImplementedError("Resource.update not implemented")
 
-        return resource.update(id=id, model=update)
+        return resource.update(
+            id=id, attributes=attributes, relationships=relationships
+        )
 
     def perform_delete(self, request: Request, resource: TResource, id: str | int):
         if not resource.delete:
@@ -246,8 +268,15 @@ class ResourceRouter(APIRouter, Generic[TResource]):
     def _update(self, *, id: Union[int, str], update: TUpdatePayload, request: Request):
         resource = self.get_resource(request=request)
 
+        attributes, relationships = self.parse_update(
+            resource=resource, update=update.dict(exclude_unset=True)
+        )
         row = self.perform_update(
-            request=request, resource=resource, update=update, id=id
+            request=request,
+            resource=resource,
+            attributes=attributes,
+            relationships=relationships,
+            id=id,
         )
 
         return self.build_response(rows=row, resource=resource, request=request)

@@ -269,14 +269,8 @@ class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[
                 attr = getattr(parent, zipped_field.field)
 
                 if option:
-                    print(
-                        "Creating child option from", parent, " -> ", zipped_field.field
-                    )
                     option = option.joinedload(attr)
                 else:
-                    print(
-                        "Creating root option from", parent, " -> ", zipped_field.field
-                    )
                     option = joinedload(attr)
 
             options.append(option)
@@ -310,6 +304,9 @@ class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[
             schema = relationship_info.schema_with_relationships.schema
 
             selected_objs = getattr(_obj, field)
+            if not selected_objs:
+                return []
+
             selected_objs = (
                 selected_objs if isinstance(selected_objs, list) else [selected_objs]
             )
@@ -366,24 +363,27 @@ class UpdateResourceMixin:
         self: SQLResourceProtocol,
         *,
         id: int | str,
-        attributes: SQLModel,
-        relationship_objects: Optional[dict[str, str | int | list[str | int]]] = None,
+        attributes: dict,
+        relationships: Optional[dict[str, str | int | list[str | int]]] = None,
         **kwargs,
     ):
         row = self.get_object(id=id)
 
-        data = attributes.dict(exclude_unset=True)
-        for key, value in list(data.items()) + list(kwargs.items()):
+        print("Attributes", attributes)
+        print("Relationships", relationships)
+        print("Kwargs", kwargs)
+
+        for key, value in list(attributes.items()) + list(kwargs.items()):
             setattr(row, key, value)
 
         # Accept a `relationships` attribute. It should be a dict of field
         # to {type, id} or list of the same. Then grab the resource from
         # the register and an update where.
-        relationships = self.get_relationships()
+        model_relationships = self.get_relationships()
 
-        if relationship_objects:
-            for field, related_ids in relationship_objects.items():
-                relationship = relationships[field]
+        if relationships:
+            for field, related_ids in relationships.items():
+                relationship = model_relationships[field]
                 direction = relationship.direction
 
                 if direction == ONETOMANY:

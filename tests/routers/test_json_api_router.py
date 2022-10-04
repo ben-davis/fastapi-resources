@@ -1,15 +1,21 @@
+from pprint import pprint
+from unittest.mock import patch
+
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from fastapi_resources import routers
-from tests.resources.sqlmodel_models import Planet
-from tests.routers import in_memory_resource
-from tests.routers.models import (
+from sqlalchemy.orm.session import close_all_sessions
+from sqlmodel import Session, select
+from tests.resources.sqlmodel_models import (
     Galaxy,
     GalaxyResource,
+    Planet,
     PlanetResource,
     Star,
     StarResource,
+    engine,
+    registry,
 )
 
 app = FastAPI()
@@ -26,23 +32,45 @@ app.include_router(galaxy_router)
 client = TestClient(app)
 
 
-@pytest.fixture(autouse=True)
-def reset_db():
-    in_memory_resource.id_counter = 1
-    in_memory_resource.test_db["galaxy"] = {}
-    in_memory_resource.test_db["star"] = {}
-    in_memory_resource.test_db["planet"] = {}
+@pytest.fixture(scope="module", autouse=True)
+def setup_database():
+    registry.metadata.create_all(engine)
+
+    yield
+
+    close_all_sessions()
+
+    registry.metadata.drop_all(engine)
+
+
+@pytest.fixture(scope="function")
+def session():
+    conn = engine.connect()
+    transaction = conn.begin()
+    session = Session(bind=conn)
+
+    # Patch the SQLResource's session
+    def get_resource_kwargs(self: routers.JSONAPIResourceRouter, request: Request):
+        return {"session": session}
+
+    with patch.object(
+        routers.JSONAPIResourceRouter, "get_resource_kwargs", get_resource_kwargs
+    ):
+        yield session
+
+    session.close()
+    transaction.rollback()
+    conn.close()
 
 
 class TestRetrieve:
-    def test_retrieve(self):
+    def test_retrieve(self, session: Session):
         star = Star(name="Sirius")
-        star.id = 1
-        planet = Planet(name="Earth", star_id=1)
-        planet.id = 1
+        planet = Planet(name="Earth", star=star)
 
-        in_memory_resource.test_db["planet"][planet.id] = planet
-        in_memory_resource.test_db["star"][star.id] = star
+        session.add(star)
+        session.add(planet)
+        session.commit()
 
         response = client.get(f"/stars/{star.id}")
 
@@ -51,7 +79,7 @@ class TestRetrieve:
             "data": {
                 "id": "1",
                 "type": "star",
-                "attributes": {"name": "Sirius"},
+                "attributes": {"name": "Sirius", "brightness": 1},
                 "links": {"self": "/stars/1"},
                 "relationships": {
                     "planets": {
@@ -79,14 +107,13 @@ class TestRetrieve:
             "links": {"self": "/stars/1"},
         }
 
-    def test_include(self):
-        star = Star(name="Sun")
-        star.id = 1
-        planet = Planet(name="Earth", star_id=1)
-        planet.id = 1
+    def test_include(self, session: Session):
+        star = Star(name="Sirius")
+        planet = Planet(name="Earth", star=star)
 
-        in_memory_resource.test_db["star"][star.id] = star
-        in_memory_resource.test_db["planet"][planet.id] = planet
+        session.add(star)
+        session.add(planet)
+        session.commit()
 
         response = client.get(f"/planets/{planet.id}?include=star")
 
@@ -99,19 +126,26 @@ class TestRetrieve:
                 },
                 "type": "planet",
                 "relationships": {
+                    "favorite_galaxy": {
+                        "data": None,
+                        "links": {
+                            "related": "/planets/1/favorite_galaxy",
+                            "self": "/planets/1/relationships/favorite_galaxy",
+                        },
+                    },
                     "star": {
                         "data": {"type": "star", "id": "1"},
                         "links": {
                             "related": "/planets/1/star",
                             "self": "/planets/1/relationships/star",
                         },
-                    }
+                    },
                 },
                 "links": {"self": "/planets/1"},
             },
             "included": [
                 {
-                    "attributes": {"name": "Sun"},
+                    "attributes": {"name": "Sirius", "brightness": 1},
                     "id": "1",
                     "type": "star",
                     "links": {"self": "/stars/1"},
@@ -143,11 +177,11 @@ class TestRetrieve:
 
 
 class TestList:
-    def test_list(self):
+    def test_list(self, session: Session):
         star = Star(name="Sirius")
-        star.id = 1
 
-        in_memory_resource.test_db["star"][star.id] = star
+        session.add(star)
+        session.commit()
 
         response = client.get(f"/stars")
 
@@ -155,7 +189,7 @@ class TestList:
         assert response.json() == {
             "data": [
                 {
-                    "attributes": {"name": "Sirius"},
+                    "attributes": {"name": "Sirius", "brightness": 1},
                     "id": "1",
                     "type": "star",
                     "links": {"self": "/stars/1"},
@@ -181,20 +215,17 @@ class TestList:
             "links": {"self": "/stars"},
         }
 
-    def test_include(self):
+    def test_include(self, session: Session):
         galaxy = Galaxy(name="Milky Way")
-        galaxy.id = 1
-        star = Star(name="Sun", galaxy_id=1)
-        star.id = 1
-        planet = Planet(name="Earth", star_id=1)
-        planet.id = 1
+        star = Star(name="Sun", galaxy=galaxy)
+        planet = Planet(name="Earth", star=star)
         hoth = Planet(name="Hoth")
-        hoth.id = 2
 
-        in_memory_resource.test_db["galaxy"][galaxy.id] = galaxy
-        in_memory_resource.test_db["star"][star.id] = star
-        in_memory_resource.test_db["planet"][planet.id] = planet
-        in_memory_resource.test_db["planet"][hoth.id] = hoth
+        session.add(galaxy)
+        session.add(star)
+        session.add(planet)
+        session.add(hoth)
+        session.commit()
 
         response = client.get(f"/planets?include=star")
 
@@ -209,6 +240,13 @@ class TestList:
                     "type": "planet",
                     "links": {"self": "/planets/1"},
                     "relationships": {
+                        "favorite_galaxy": {
+                            "data": None,
+                            "links": {
+                                "related": "/planets/1/favorite_galaxy",
+                                "self": "/planets/1/relationships/favorite_galaxy",
+                            },
+                        },
                         "star": {
                             "data": {"id": "1", "type": "star"},
                             "links": {
@@ -226,6 +264,13 @@ class TestList:
                     "type": "planet",
                     "links": {"self": "/planets/2"},
                     "relationships": {
+                        "favorite_galaxy": {
+                            "data": None,
+                            "links": {
+                                "related": "/planets/2/favorite_galaxy",
+                                "self": "/planets/2/relationships/favorite_galaxy",
+                            },
+                        },
                         "star": {
                             "data": None,
                             "links": {
@@ -238,7 +283,7 @@ class TestList:
             ],
             "included": [
                 {
-                    "attributes": {"name": "Sun"},
+                    "attributes": {"name": "Sun", "brightness": 1},
                     "id": "1",
                     "type": "star",
                     "links": {"self": "/stars/1"},
@@ -265,13 +310,19 @@ class TestList:
 
 
 class TestUpdate:
-    def test_update(self):
+    def test_update(self, session: Session):
         star = Star(name="Sirius")
-        star.id = 1
+        galaxy = Galaxy(name="Milky Way")
+        earth = Planet(name="Earth")
+        mars = Planet(name="Mars")
 
-        in_memory_resource.test_db["star"][star.id] = star
+        session.add(star)
+        session.add(galaxy)
+        session.add(earth)
+        session.add(mars)
+        session.commit()
+        session.refresh(star)
 
-        # TODO: Correct the patch
         response = client.patch(
             f"/stars/{star.id}",
             json={
@@ -281,28 +332,39 @@ class TestUpdate:
                     "attributes": {
                         "name": "Vega",
                     },
+                    "relationships": {
+                        "galaxy": {"data": {"type": "galaxy", "id": galaxy.id}},
+                        "planets": {
+                            "data": [
+                                {"type": "planet", "id": earth.id},
+                                {"type": "planet", "id": mars.id},
+                            ]
+                        },
+                    },
                 }
             },
         )
 
-        assert response.json() == ""
         assert response.status_code == 200
         assert response.json() == {
             "data": {
-                "attributes": {"name": "Vega"},
+                "attributes": {"name": "Vega", "brightness": 1},
                 "id": "1",
                 "type": "star",
                 "links": {"self": "/stars/1"},
                 "relationships": {
                     "galaxy": {
-                        "data": None,
+                        "data": {"type": "galaxy", "id": str(galaxy.id)},
                         "links": {
                             "related": "/stars/1/galaxy",
                             "self": "/stars/1/relationships/galaxy",
                         },
                     },
                     "planets": {
-                        "data": [],
+                        "data": [
+                            {"id": str(earth.id), "type": "planet"},
+                            {"id": str(mars.id), "type": "planet"},
+                        ],
                         "links": {
                             "related": "/stars/1/planets",
                             "self": "/stars/1/relationships/planets",
@@ -314,17 +376,15 @@ class TestUpdate:
             "links": {"self": "/stars/1"},
         }
 
-        assert in_memory_resource.test_db["star"][1].name == "Vega"
-
 
 class TestCreate:
-    def test_create(self):
+    def test_create(self, session: Session):
         response = client.post(f"/stars", json={"name": "Vega"})
 
         assert response.status_code == 201
         assert response.json() == {
             "data": {
-                "attributes": {"name": "Vega"},
+                "attributes": {"name": "Vega", "brightness": 1},
                 "id": "1",
                 "type": "star",
                 "links": {"self": "/stars/1"},
@@ -349,35 +409,26 @@ class TestCreate:
             "links": {"self": "/stars"},
         }
 
-        assert in_memory_resource.test_db["star"][1]
-
 
 class TestDelete:
-    def test_delete(self):
+    def test_delete(self, session: Session):
         star = Star(name="Sirius")
-        star.id = 1
-
-        in_memory_resource.test_db["star"][star.id] = star
+        session.add(star)
+        session.commit()
 
         response = client.delete(f"/stars/{star.id}")
         assert response.status_code == 204
 
-        assert not in_memory_resource.test_db["star"]
+        assert star not in session
 
 
 class TestSchema:
     def test_include(self):
         schema = app.openapi()
-        galaxy_included = [
-            item["$ref"]
-            for item in schema["components"]["schemas"][
-                "JAResponseSingle_GalaxyRead__Literal__List_"
-            ]["properties"]["included"]["items"]["anyOf"]
-        ]
 
         # Galaxy only has Star as a direct relationship, so the inclusion
         # of a planet shows the router is walking the relationships.
-        assert galaxy_included == [
-            "#/components/schemas/JAResourceObject_Star__Literal_",
-            "#/components/schemas/JAResourceObject_Planet__Literal_",
-        ]
+        assert (
+            "GalaxyRead___planets__list__included__galaxy__Galaxy__Attributes"
+            in schema["components"]["schemas"]
+        )
