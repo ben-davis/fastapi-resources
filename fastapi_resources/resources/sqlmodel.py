@@ -64,7 +64,6 @@ class SQLResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
     session: Session
 
     registry: dict[Type[SQLModel], type["BaseSQLResource"]] = {}
-    resource_registry: dict[str, type["BaseSQLResource"]] = {}
 
     @classmethod
     def get_relationships(
@@ -201,12 +200,10 @@ def get_relationships_from_schema(
 
 class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[TDb]):
     registry: dict[Type[SQLModel], type["BaseSQLResource"]] = {}
-    resource_registry: dict[str, type["BaseSQLResource"]] = {}
 
     def __init_subclass__(cls) -> None:
         if Db := getattr(cls, "Db", None):
             BaseSQLResource.registry[Db] = cls
-            BaseSQLResource.resource_registry[cls.name] = cls
 
         return super().__init_subclass__()
 
@@ -364,18 +361,13 @@ class CreateResourceMixin:
         return row
 
 
-class RelationshipObject(TypedDict):
-    type: str
-    id: Any
-
-
 class UpdateResourceMixin:
     def update(
         self: SQLResourceProtocol,
         *,
         id: int | str,
         attributes: SQLModel,
-        relationship_objects: dict[str, RelationshipObject | list[RelationshipObject]],
+        relationship_objects: Optional[dict[str, str | int | list[str | int]]] = None,
         **kwargs,
     ):
         row = self.get_object(id=id)
@@ -389,49 +381,43 @@ class UpdateResourceMixin:
         # the register and an update where.
         relationships = self.get_relationships()
 
-        for field, relationship_object in relationship_objects.items():
-            relationship = relationships[field]
-            direction = relationship.direction
+        if relationship_objects:
+            for field, related_ids in relationship_objects.items():
+                relationship = relationships[field]
+                direction = relationship.direction
 
-            if direction == ONETOMANY:
-                assert isinstance(
-                    relationship_object, list
-                ), "A list of relationship objects with keys {type, ids} must be provided for {field}"
+                if direction == ONETOMANY:
+                    assert isinstance(
+                        related_ids, list
+                    ), "A list of IDs must be provided for {field}"
 
-                related_resource = self.resource_registry[
-                    relationship_object[0]["type"]
-                ]
-                related_db_model = related_resource.Db
+                    related_resource = self.registry[
+                        relationship.schema_with_relationships.schema
+                    ]
+                    related_db_model = related_resource.Db
+                    new_related_ids = [rid for rid in related_ids]
 
-                # Update the related objects
-                self.session.exec(
-                    update(related_db_model)
-                    .where(
-                        related_db_model.id.in_([r["id"] for r in relationship_object])
+                    # Update the related objects
+                    self.session.execute(
+                        update(related_db_model)
+                        .where(related_db_model.id.in_(new_related_ids))
+                        .values({relationship.update_field: id})
                     )
-                    .values({relationship.update_field: id})
-                )
 
-                # Detach the old related objects
-                # NOTE: This will raise if the foreign key is required. Is this OK?
-                self.session.exec(
-                    update(related_db_model)
-                    .where(
-                        getattr(related_db_model, relationship.update_field) == id,
-                        related_db_model.id.not_in(
-                            [r["id"] for r in relationship_object]
-                        ),
+                    # Detach the old related objects
+                    # NOTE: This will raise if the foreign key is required. Is this OK?
+                    self.session.execute(
+                        update(related_db_model)
+                        .where(
+                            getattr(related_db_model, relationship.update_field) == id,
+                            related_db_model.id.not_in(new_related_ids),
+                        )
+                        .values({relationship.update_field: None})
                     )
-                    .values({relationship.update_field: None})
-                )
 
-            elif direction == MANYTOONE:
-                assert isinstance(
-                    relationship_object, dict
-                ), "A relationship object with the keys {type, id} must be provided for {field}"
-
-                # Can update locally via a setattr
-                setattr(row, relationship.update_field, relationship_object["id"])
+                elif direction == MANYTOONE:
+                    # Can update locally via a setattr
+                    setattr(row, relationship.update_field, related_ids)
 
         self.session.add(row)
         self.session.commit()

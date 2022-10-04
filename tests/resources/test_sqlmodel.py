@@ -310,6 +310,9 @@ class TestUpdate:
         session.refresh(star)
 
         assert star.id
+        assert earth.id
+        assert mars.id
+        assert milky_way.id
         assert len(star.planets) == 1
 
         resource = StarResource(session=session)
@@ -319,10 +322,10 @@ class TestUpdate:
             attributes=StarUpdate(name="Milky Way"),
             relationship_objects={
                 "planets": [
-                    {"type": "planet", "id": earth.id},
-                    {"type": "planet", "id": mars.id},
+                    earth.id,
+                    mars.id,
                 ],
-                "galaxy": {"type": "planet", "id": milky_way.id},
+                "galaxy": milky_way.id,
             },
         )
 
