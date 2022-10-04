@@ -2,7 +2,6 @@ import pytest
 from sqlalchemy.orm import exc as sa_exceptions
 from sqlalchemy.orm.session import close_all_sessions
 from sqlmodel import Session, select
-
 from tests.resources.sqlmodel_models import (
     Galaxy,
     GalaxyResource,
@@ -267,7 +266,9 @@ class TestUpdate:
         assert star.id
 
         resource = StarResource(session=session)
-        star_create = resource.update(id=star.id, model=StarUpdate(name="Milky Way"))
+        star_create = resource.update(
+            id=star.id, attributes=StarUpdate(name="Milky Way")
+        )
 
         star_db = session.exec(select(Star).where(Star.id == star.id)).one()
 
@@ -284,10 +285,53 @@ class TestUpdate:
 
         resource = StarResource(session=session)
         star_create = resource.update(
-            id=star.id, model=StarUpdate(), name="Passed Manually"
+            id=star.id, attributes=StarUpdate(), name="Passed Manually"
         )
 
         assert star_create.name == "Passed Manually"
+
+    def test_update_relationships(self, session: Session):
+        star = Star(name="Sirius")
+        milky_way = Galaxy(name="Milky Way")
+        earth = Planet(name="Earth")
+        mars = Planet(name="Mars")
+        mercury = Planet(name="Mercury")
+
+        # No default galaxy, but give it a planet
+        star.planets.append(mercury)
+
+        session.add(star)
+        session.add(milky_way)
+        session.add(earth)
+        session.add(mars)
+        session.add(mercury)
+
+        session.commit()
+        session.refresh(star)
+
+        assert star.id
+        assert len(star.planets) == 1
+
+        resource = StarResource(session=session)
+
+        star_create = resource.update(
+            id=star.id,
+            attributes=StarUpdate(name="Milky Way"),
+            relationship_objects={
+                "planets": [
+                    {"type": "planet", "id": earth.id},
+                    {"type": "planet", "id": mars.id},
+                ],
+                "galaxy": {"type": "planet", "id": milky_way.id},
+            },
+        )
+
+        star_db = session.exec(select(Star).where(Star.id == star.id)).one()
+
+        for s in (star_create, star_db):
+            assert s.name == "Milky Way"
+            assert s.galaxy == milky_way
+            assert set(p.id for p in s.planets) == set((earth.id, mars.id))
 
 
 class TestDelete:

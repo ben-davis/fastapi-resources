@@ -2,14 +2,26 @@ import copy
 import operator
 import typing
 from dataclasses import dataclass
-from typing import Any, ClassVar, Generic, Optional, Protocol, Type, TypeVar
+from pprint import pprint
+from typing import (
+    Any,
+    ClassVar,
+    Generic,
+    Literal,
+    Optional,
+    Protocol,
+    Type,
+    TypedDict,
+    TypeVar,
+)
 
 from fastapi import HTTPException
 from fastapi_resources.resources import base_resource, types
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm import MANYTOONE, ONETOMANY
 from sqlalchemy.orm import exc as sa_exceptions
 from sqlalchemy.orm import joinedload
-from sqlmodel import Session, SQLModel, select
+from sqlmodel import Session, SQLModel, select, update
 from sqlmodel.sql.expression import SelectOfScalar
 
 
@@ -24,6 +36,8 @@ class SQLModelRelationshipInfo:
     schema_with_relationships: SchemaWithRelationships
     many: bool
     field: str
+    direction: ONETOMANY | MANYTOONE
+    update_field: str
 
 
 Relationships = dict[str, SQLModelRelationshipInfo]
@@ -48,6 +62,9 @@ class SQLResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
     engine: ClassVar[Optional[Engine]] = None
 
     session: Session
+
+    registry: dict[Type[SQLModel], type["BaseSQLResource"]] = {}
+    resource_registry: dict[str, type["BaseSQLResource"]] = {}
 
     @classmethod
     def get_relationships(
@@ -127,6 +144,16 @@ def get_relationships_from_schema(
         # Used to uniquely identify the related schema relative to a parent
         new_parent_key = f"{schema}.{field}"
 
+        sqlalchemy_relationship = getattr(schema, field).property
+
+        # TODO: Handle MANYTOMANY
+        direction = sqlalchemy_relationship.direction
+        update_field = list(
+            sqlalchemy_relationship.local_columns
+            if direction == MANYTOONE
+            else sqlalchemy_relationship.remote_side
+        )[0].name
+
         # If this branch already contains the schema with the same parent,
         # we can reuse the relationship to avoid a cycle.
         if relationship_info := schema_cache.get((new_parent_key, related_schema)):
@@ -134,6 +161,8 @@ def get_relationships_from_schema(
                 schema_with_relationships=relationship_info,
                 many=many,
                 field=field,
+                direction=direction,
+                update_field=update_field,
             )
             continue
 
@@ -163,6 +192,8 @@ def get_relationships_from_schema(
             schema_with_relationships=schema_with_relationship,
             many=many,
             field=field,
+            direction=direction,
+            update_field=update_field,
         )
 
     return relationships
@@ -170,10 +201,12 @@ def get_relationships_from_schema(
 
 class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[TDb]):
     registry: dict[Type[SQLModel], type["BaseSQLResource"]] = {}
+    resource_registry: dict[str, type["BaseSQLResource"]] = {}
 
     def __init_subclass__(cls) -> None:
         if Db := getattr(cls, "Db", None):
             BaseSQLResource.registry[Db] = cls
+            BaseSQLResource.resource_registry[cls.name] = cls
 
         return super().__init_subclass__()
 
@@ -331,19 +364,74 @@ class CreateResourceMixin:
         return row
 
 
+class RelationshipObject(TypedDict):
+    type: str
+    id: Any
+
+
 class UpdateResourceMixin:
     def update(
         self: SQLResourceProtocol,
         *,
         id: int | str,
-        model: SQLModel,
+        attributes: SQLModel,
+        relationship_objects: dict[str, RelationshipObject | list[RelationshipObject]],
         **kwargs,
     ):
         row = self.get_object(id=id)
 
-        data = model.dict(exclude_unset=True)
+        data = attributes.dict(exclude_unset=True)
         for key, value in list(data.items()) + list(kwargs.items()):
             setattr(row, key, value)
+
+        # Accept a `relationships` attribute. It should be a dict of field
+        # to {type, id} or list of the same. Then grab the resource from
+        # the register and an update where.
+        relationships = self.get_relationships()
+
+        for field, relationship_object in relationship_objects.items():
+            relationship = relationships[field]
+            direction = relationship.direction
+
+            if direction == ONETOMANY:
+                assert isinstance(
+                    relationship_object, list
+                ), "A list of relationship objects with keys {type, ids} must be provided for {field}"
+
+                related_resource = self.resource_registry[
+                    relationship_object[0]["type"]
+                ]
+                related_db_model = related_resource.Db
+
+                # Update the related objects
+                self.session.exec(
+                    update(related_db_model)
+                    .where(
+                        related_db_model.id.in_([r["id"] for r in relationship_object])
+                    )
+                    .values({relationship.update_field: id})
+                )
+
+                # Detach the old related objects
+                # NOTE: This will raise if the foreign key is required. Is this OK?
+                self.session.exec(
+                    update(related_db_model)
+                    .where(
+                        getattr(related_db_model, relationship.update_field) == id,
+                        related_db_model.id.not_in(
+                            [r["id"] for r in relationship_object]
+                        ),
+                    )
+                    .values({relationship.update_field: None})
+                )
+
+            elif direction == MANYTOONE:
+                assert isinstance(
+                    relationship_object, dict
+                ), "A relationship object with the keys {type, id} must be provided for {field}"
+
+                # Can update locally via a setattr
+                setattr(row, relationship.update_field, relationship_object["id"])
 
         self.session.add(row)
         self.session.commit()
