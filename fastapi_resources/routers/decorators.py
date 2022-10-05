@@ -18,7 +18,7 @@ def action(detail: bool, methods: list[methods] = ["get"], **kwargs):
 
             rows = func(*args, **kwargs)
 
-            return self.build_response(resource=resource, rows=rows)
+            return self.build_response(resource=resource, rows=rows, request=request)
 
         return wrapped
 
