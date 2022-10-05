@@ -71,6 +71,16 @@ class JAUpdateRequest(GenericModel, Generic[TAttributes, TRelationships, TName])
     data: JAUpdateObject[TAttributes, TRelationships, TName]
 
 
+class JACreateObject(GenericModel, Generic[TAttributes, TRelationships, TName]):
+    type: TName
+    attributes: Optional[TAttributes]
+    relationships: Optional[TRelationships]
+
+
+class JACreateRequest(GenericModel, Generic[TAttributes, TRelationships, TName]):
+    data: JACreateObject[TAttributes, TRelationships, TName]
+
+
 class JAResponseSingle(
     GenericModel, Generic[TAttributes, TRelationships, TName, TIncluded]
 ):
@@ -245,6 +255,18 @@ class JSONAPIResourceRouter(ResourceRouter):
 
         return JAUpdateRequest[Attributes, Relationships, Name]
 
+    def get_create_model(self):
+        Name = Literal[(self.resource_class.name,)]  # type: ignore
+
+        Attributes = get_attributes_model_for_resource_class(
+            method="create", resource_class=self.resource_class
+        )
+        Relationships = get_relationships_schema_for_resource_class(
+            method="create", resource_class=self.resource_class
+        )
+
+        return JACreateRequest[Attributes, Relationships, Name]
+
     def get_resource(self, request: Request):
         inclusions: Inclusions = []
         include = request.query_params.get("include")
@@ -388,22 +410,33 @@ class JSONAPIResourceRouter(ResourceRouter):
             data=data, included=list(included_resources.values()), links=links
         )
 
-    def parse_update(self, resource: Resource, update: dict):
+    def _parse_request_payload(self, payload: dict):
         # Merge the attributes and relationships into a single update
         parsed_relationships = {}
 
-        for key, linkage in update["data"].get("relationships", {}).items():
+        for key, linkage in payload["data"].get("relationships", {}).items():
             identifiers = linkage["data"]
             if isinstance(identifiers, list):
                 parsed_relationships[key] = [ro["id"] for ro in identifiers]
             else:
                 parsed_relationships[key] = identifiers["id"]
 
-        merged_update = {
-            **update["data"].get("attributes", {}),
+        merged_payload = {
+            **payload["data"].get("attributes", {}),
             **parsed_relationships,
         }
-        return super().parse_update(resource, merged_update)
+
+        return merged_payload
+
+    def parse_update(self, resource: Resource, update: dict):
+        return super().parse_update(
+            resource, self._parse_request_payload(payload=update)
+        )
+
+    def parse_create(self, resource: Resource, create: dict):
+        return super().parse_update(
+            resource, self._parse_request_payload(payload=create)
+        )
 
     def _retrieve(
         self,

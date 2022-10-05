@@ -78,10 +78,14 @@ class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
         )
 
     def perform_create(
-        self, request: Request, resource: GalaxyResource, create: GalaxyCreate
+        self,
+        request: Request,
+        resource: GalaxyResource,
+        attributes: dict,
+        relationships: dict,
     ):
-        create.name = "ProvidedByPerformCreate"
-        return resource.create(model=create)
+        attributes["name"] = "ProvidedByPerformCreate"
+        return resource.create(attributes=attributes, relationships=relationships)
 
     def perform_delete(self, request: Request, resource: GalaxyResource, id: int):
         FakeJobs.do_something()

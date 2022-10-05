@@ -214,12 +214,16 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         return update, relationships
 
     def perform_create(
-        self, request: Request, resource: TResource, create: TCreatePayload
+        self,
+        request: Request,
+        resource: TResource,
+        attributes: dict,
+        relationships: dict,
     ):
         if not resource.create:
             raise NotImplementedError("Resource.create not implemented")
 
-        return resource.create(model=create)
+        return resource.create(attributes=attributes, relationships=relationships)
 
     def perform_update(
         self,
@@ -261,7 +265,16 @@ class ResourceRouter(APIRouter, Generic[TResource]):
     def _create(self, *, create: TCreatePayload, request: Request):
         resource = self.get_resource(request=request)
 
-        row = self.perform_create(request=request, resource=resource, create=create)
+        attributes, relationships = self.parse_update(
+            resource=resource, update=create.dict(exclude_unset=True)
+        )
+
+        row = self.perform_create(
+            request=request,
+            resource=resource,
+            attributes=attributes,
+            relationships=relationships,
+        )
 
         return self.build_response(rows=row, resource=resource, request=request)
 

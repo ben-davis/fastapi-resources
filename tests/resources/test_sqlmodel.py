@@ -1,6 +1,7 @@
 import pytest
 from sqlalchemy.orm import exc as sa_exceptions
 from sqlmodel import Session, select
+from tests.conftest import OneTimeData
 from tests.resources.sqlmodel_models import (
     Galaxy,
     GalaxyResource,
@@ -240,7 +241,9 @@ class TestList:
 class TestCreate:
     def test_create(self, session: Session):
         resource = StarResource(session=session)
-        star_create = resource.create(model=StarCreate(name="Sirius"))
+        star_create = resource.create(
+            attributes=StarCreate(name="Sirius").dict(exclude_unset=True)
+        )
 
         star_db = session.exec(select(Star).where(Star.id == star_create.id)).one()
 
@@ -250,10 +253,24 @@ class TestCreate:
     def test_extra_attributes(self, session: Session):
         resource = StarResource(session=session)
         star_create = resource.create(
-            model=StarCreate(name="Milky Way"), name="Passed Manually"
+            attributes=StarCreate(name="Milky Way").dict(exclude_unset=True),
+            name="Passed Manually",
         )
 
         assert star_create.name == "Passed Manually"
+
+    def test_relationships(self, session: Session, setup_database: OneTimeData):
+        resource = StarResource(session=session)
+
+        star_create = resource.create(
+            attributes=StarCreate(name="Milky Way").dict(exclude_unset=True),
+            relationships={"planets": [setup_database.earth_id]},
+            name="Passed Manually",
+        )
+
+        assert star_create.name == "Passed Manually"
+        assert len(star_create.planets) == 1
+        assert star_create.planets[0].id == setup_database.earth_id
 
 
 class TestUpdate:

@@ -342,10 +342,11 @@ class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[
 class CreateResourceMixin:
     def create(
         self: SQLResourceProtocol,
-        model: SQLModel,
+        attributes: dict,
+        relationships: Optional[dict[str, str | int | list[str | int]]] = None,
         **kwargs,
     ):
-        row = self.Db.from_orm(model)
+        row = self.Db(**attributes)
 
         for key, value in kwargs.items():
             setattr(row, key, value)
@@ -353,7 +354,42 @@ class CreateResourceMixin:
         self.session.add(row)
         self.session.commit()
 
-        row = self.get_object(id=row.id)
+        model_relationships = self.get_relationships()
+
+        if relationships:
+            save_row = False
+
+            for field, related_ids in relationships.items():
+                relationship = model_relationships[field]
+                direction = relationship.direction
+
+                if direction == ONETOMANY:
+                    assert isinstance(
+                        related_ids, list
+                    ), "A list of IDs must be provided for {field}"
+
+                    related_resource = self.registry[
+                        relationship.schema_with_relationships.schema
+                    ]
+                    related_db_model = related_resource.Db
+                    new_related_ids = [rid for rid in related_ids]
+
+                    # Update the related objects
+                    self.session.execute(
+                        update(related_db_model)
+                        .where(related_db_model.id.in_(new_related_ids))
+                        .values({relationship.update_field: row.id})
+                    )
+
+                elif direction == MANYTOONE:
+                    # Can update locally via a setattr
+                    setattr(row, relationship.update_field, related_ids)
+                    save_row = True
+
+            if save_row:
+                self.session.commit()
+
+            self.session.refresh(row)
 
         return row
 
@@ -369,16 +405,9 @@ class UpdateResourceMixin:
     ):
         row = self.get_object(id=id)
 
-        print("Attributes", attributes)
-        print("Relationships", relationships)
-        print("Kwargs", kwargs)
-
         for key, value in list(attributes.items()) + list(kwargs.items()):
             setattr(row, key, value)
 
-        # Accept a `relationships` attribute. It should be a dict of field
-        # to {type, id} or list of the same. Then grab the resource from
-        # the register and an update where.
         model_relationships = self.get_relationships()
 
         if relationships:

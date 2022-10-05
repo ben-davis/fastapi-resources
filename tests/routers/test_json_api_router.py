@@ -434,26 +434,55 @@ class TestUpdate:
 
 
 class TestCreate:
-    def test_create(self, session: Session):
-        response = client.post(f"/stars", json={"name": "Vega"})
+    def test_create(self, session: Session, setup_database: OneTimeData):
+        earth_id = setup_database.earth_id
+
+        milky_way = Galaxy(name="Milky Way")
+        session.add(milky_way)
+        session.commit()
+
+        response = client.post(
+            f"/stars",
+            json={
+                "data": {
+                    "type": "star",
+                    "attributes": {
+                        "name": "Vega",
+                    },
+                    "relationships": {
+                        "galaxy": {"data": {"type": "galaxy", "id": milky_way.id}},
+                        "planets": {
+                            "data": [
+                                {"type": "planet", "id": earth_id},
+                            ]
+                        },
+                    },
+                },
+            },
+        )
 
         assert response.status_code == 201
         assert response.json() == {
             "data": {
-                "attributes": {"name": "Vega", "brightness": 1},
-                "id": IsStr,
                 "type": "star",
+                "id": IsStr,
+                "attributes": {
+                    "brightness": 1,
+                    "name": "Vega",
+                },
                 "links": {"self": IsStr},
                 "relationships": {
                     "galaxy": {
-                        "data": None,
+                        "data": {"type": "galaxy", "id": str(milky_way.id)},
                         "links": {
                             "related": IsStr,
                             "self": IsStr,
                         },
                     },
                     "planets": {
-                        "data": [],
+                        "data": [
+                            {"id": str(earth_id), "type": "planet"},
+                        ],
                         "links": {
                             "related": IsStr,
                             "self": IsStr,
