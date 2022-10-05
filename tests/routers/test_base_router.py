@@ -2,25 +2,23 @@ from typing import Generic, TypeVar
 from unittest import mock
 
 import pytest
+from dirty_equals import IsInt
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from fastapi_resources import routers
 from fastapi_resources.routers import decorators
 from pydantic.generics import GenericModel
-from sqlalchemy.orm import close_all_sessions
 from sqlmodel import Session
+from tests.conftest import OneTimeData
 from tests.resources.sqlmodel_models import (
     Galaxy,
     GalaxyCreate,
     GalaxyResource,
-    GalaxyUpdate,
     PlanetResource,
     Star,
     StarResource,
     engine,
-    registry,
 )
-from tests.routers import in_memory_resource
 
 app = FastAPI()
 
@@ -100,18 +98,7 @@ app.include_router(galaxy_router)
 client = TestClient(app)
 
 
-@pytest.fixture(scope="module", autouse=True)
-def setup_database():
-    registry.metadata.create_all(engine)
-
-    yield
-
-    close_all_sessions()
-
-    registry.metadata.drop_all(engine)
-
-
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
 def session():
     conn = engine.connect()
     transaction = conn.begin()
@@ -132,33 +119,32 @@ def session():
 
 
 class TestRetrieve:
-    def test_retrieve(self, session: Session):
-        star = Star(name="Sirius")
-        session.add(star)
-        session.commit()
+    def test_retrieve(self, session: Session, setup_database: OneTimeData):
+        sun_id = setup_database.sun_id
 
-        response = client.get(f"/stars/{star.id}")
+        response = client.get(f"/stars/{sun_id}")
 
         assert response.status_code == 200
         assert response.json() == {
-            "id": 1,
-            "name": "Sirius",
+            "id": sun_id,
+            "name": "Sun",
             "brightness": 1,
             "galaxy_id": None,
         }
 
 
 class TestList:
-    def test_list(self, session: Session):
-        star = Star(name="Sirius")
-        session.add(star)
-        session.commit()
-
+    def test_list(self, session: Session, setup_database: OneTimeData):
         response = client.get(f"/stars/")
 
         assert response.status_code == 200
         assert response.json() == [
-            {"id": 1, "name": "Sirius", "brightness": 1, "galaxy_id": None},
+            {
+                "id": setup_database.sun_id,
+                "name": "Sun",
+                "brightness": 1,
+                "galaxy_id": None,
+            },
         ]
 
 
@@ -172,7 +158,7 @@ class TestUpdate:
 
         assert response.status_code == 200
         assert response.json() == {
-            "id": 1,
+            "id": star.id,
             "name": "Vega",
             "brightness": 1,
             "galaxy_id": None,
@@ -185,7 +171,7 @@ class TestCreate:
 
         assert response.status_code == 201
         assert response.json() == {
-            "id": 1,
+            "id": IsInt,
             "name": "Vega",
             "brightness": 1,
             "galaxy_id": None,
@@ -225,7 +211,7 @@ class TestActions:
 
         response = client.patch(f"/galaxies/{galaxy.id}/rename")
         assert response.status_code == 200
-        assert response.json() == {"data": {"id": 1, "name": "Andromeda"}}
+        assert response.json() == {"data": {"id": galaxy.id, "name": "Andromeda"}}
 
 
 class TestPerformHooks:
@@ -245,7 +231,9 @@ class TestPerformHooks:
         )
 
         assert response.status_code == 200
-        assert response.json() == {"data": {"id": 1, "name": "ProvidedByPerformUpdate"}}
+        assert response.json() == {
+            "data": {"id": galaxy.id, "name": "ProvidedByPerformUpdate"}
+        }
 
     def test_perform_delete(self, session: Session):
         galaxy = Galaxy(name="Milky Way")

@@ -106,6 +106,18 @@ optional = false
 python-versions = ">=3.7"
 
 [[package]]
+name = "dirty-equals"
+version = "0.5.0"
+description = "Doing dirty (but extremely useful) things with equals."
+category = "dev"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+pytz = ">=2021.3"
+typing-extensions = ">=4.0.1"
+
+[[package]]
 name = "fastapi"
 version = "0.85.0"
 description = "FastAPI framework, high performance, easy to learn, fast to code, ready for production"
@@ -300,6 +312,14 @@ python-versions = ">=3.7"
 
 [package.extras]
 cli = ["click (>=5.0)"]
+
+[[package]]
+name = "pytz"
+version = "2022.4"
+description = "World timezone definitions, modern and historical"
+category = "dev"
+optional = false
+python-versions = "*"
 
 [[package]]
 name = "PyYAML"
@@ -518,7 +538,7 @@ python-versions = ">=3.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "8af1e2d00ac486d7c510753e95aef6efdc4ba25a8a838f841ea918ca3065e6a8"
+content-hash = "97a71070dbee7c4e911aa33d896b93e5ace4e702ce87c9a3d0ae7e7f0703e02a"
 
 [metadata.files]
 anyio = [
@@ -575,6 +595,10 @@ debugpy = [
     {file = "debugpy-1.6.3-cp39-cp39-win_amd64.whl", hash = "sha256:34d2cdd3a7c87302ba5322b86e79c32c2115be396f3f09ca13306d8a04fe0f16"},
     {file = "debugpy-1.6.3-py2.py3-none-any.whl", hash = "sha256:84c39940a0cac410bf6aa4db00ba174f973eef521fbe9dd058e26bcabad89c4f"},
     {file = "debugpy-1.6.3.zip", hash = "sha256:e8922090514a890eec99cfb991bab872dd2e353ebb793164d5f01c362b9a40bf"},
+]
+dirty-equals = [
+    {file = "dirty_equals-0.5.0-py3-none-any.whl", hash = "sha256:23f4108be991e2661c0c81ae6deedc0bd25b3cc0ecdd7482dbad7b2bc795308f"},
+    {file = "dirty_equals-0.5.0.tar.gz", hash = "sha256:f107137476d784b7f86757a3e1291fe11e8166d4720df9c02a3ee5dfa595e1fe"},
 ]
 fastapi = [
     {file = "fastapi-0.85.0-py3-none-any.whl", hash = "sha256:1803d962f169dc9f8dde54a64b22eb16f6d81573f54401971f90f0a67234a8b4"},
@@ -741,6 +765,10 @@ pytest-watcher = [
 python-dotenv = [
     {file = "python-dotenv-0.21.0.tar.gz", hash = "sha256:b77d08274639e3d34145dfa6c7008e66df0f04b7be7a75fd0d5292c191d79045"},
     {file = "python_dotenv-0.21.0-py3-none-any.whl", hash = "sha256:1684eb44636dd462b66c3ee016599815514527ad99965de77f43e0944634a7e5"},
+]
+pytz = [
+    {file = "pytz-2022.4-py2.py3-none-any.whl", hash = "sha256:2c0784747071402c6e99f0bafdb7da0fa22645f06554c7ae06bf6358897e9c91"},
+    {file = "pytz-2022.4.tar.gz", hash = "sha256:48ce799d83b6f8aab2020e369b627446696619e79645419610b9facd909b3174"},
 ]
 PyYAML = [
     {file = "PyYAML-6.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:d4db7c7aef085872ef65a8fd7d6d09a14ae91f691dec3e87ee5ee0539d516f53"},

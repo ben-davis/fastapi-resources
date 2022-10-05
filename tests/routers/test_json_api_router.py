@@ -1,12 +1,12 @@
-from pprint import pprint
 from unittest.mock import patch
 
 import pytest
+from dirty_equals import IsStr
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from fastapi_resources import routers
-from sqlalchemy.orm.session import close_all_sessions
-from sqlmodel import Session, select
+from sqlmodel import Session
+from tests.conftest import OneTimeData
 from tests.resources.sqlmodel_models import (
     Galaxy,
     GalaxyResource,
@@ -15,7 +15,6 @@ from tests.resources.sqlmodel_models import (
     Star,
     StarResource,
     engine,
-    registry,
 )
 
 app = FastAPI()
@@ -30,17 +29,6 @@ app.include_router(galaxy_router)
 
 
 client = TestClient(app)
-
-
-@pytest.fixture(scope="module", autouse=True)
-def setup_database():
-    registry.metadata.create_all(engine)
-
-    yield
-
-    close_all_sessions()
-
-    registry.metadata.drop_all(engine)
 
 
 @pytest.fixture(scope="function")
@@ -64,58 +52,48 @@ def session():
 
 
 class TestRetrieve:
-    def test_retrieve(self, session: Session):
-        star = Star(name="Sirius")
-        planet = Planet(name="Earth", star=star)
+    def test_retrieve(self, session: Session, setup_database: OneTimeData):
+        sun_id, earth_id = setup_database
 
-        session.add(star)
-        session.add(planet)
-        session.commit()
-
-        response = client.get(f"/stars/{star.id}")
+        response = client.get(f"/stars/{sun_id}")
 
         assert response.status_code == 200
         assert response.json() == {
             "data": {
-                "id": "1",
+                "id": str(sun_id),
                 "type": "star",
-                "attributes": {"name": "Sirius", "brightness": 1},
-                "links": {"self": "/stars/1"},
+                "attributes": {"name": "Sun", "brightness": 1},
+                "links": {"self": f"/stars/{sun_id}"},
                 "relationships": {
                     "planets": {
                         "data": [
                             {
                                 "type": "planet",
-                                "id": "1",
+                                "id": str(earth_id),
                             }
                         ],
                         "links": {
-                            "related": "/stars/1/planets",
-                            "self": "/stars/1/relationships/planets",
+                            "related": f"/stars/{sun_id}/planets",
+                            "self": f"/stars/{sun_id}/relationships/planets",
                         },
                     },
                     "galaxy": {
                         "data": None,
                         "links": {
-                            "related": "/stars/1/galaxy",
-                            "self": "/stars/1/relationships/galaxy",
+                            "related": f"/stars/{sun_id}/galaxy",
+                            "self": f"/stars/{sun_id}/relationships/galaxy",
                         },
                     },
                 },
             },
             "included": [],
-            "links": {"self": "/stars/1"},
+            "links": {"self": f"/stars/{sun_id}"},
         }
 
-    def test_include(self, session: Session):
-        star = Star(name="Sirius")
-        planet = Planet(name="Earth", star=star)
+    def test_include(self, session: Session, setup_database: OneTimeData):
+        sun_id, earth_id = setup_database
 
-        session.add(star)
-        session.add(planet)
-        session.commit()
-
-        response = client.get(f"/planets/{planet.id}?include=star")
+        response = client.get(f"/planets/{earth_id}?include=star")
 
         assert response.status_code == 200
         assert response.json() == {
@@ -129,83 +107,85 @@ class TestRetrieve:
                     "favorite_galaxy": {
                         "data": None,
                         "links": {
-                            "related": "/planets/1/favorite_galaxy",
-                            "self": "/planets/1/relationships/favorite_galaxy",
+                            "related": f"/planets/{earth_id}/favorite_galaxy",
+                            "self": f"/planets/{earth_id}/relationships/favorite_galaxy",
                         },
                     },
                     "star": {
                         "data": {"type": "star", "id": "1"},
                         "links": {
-                            "related": "/planets/1/star",
-                            "self": "/planets/1/relationships/star",
+                            "related": f"/planets/{earth_id}/star",
+                            "self": f"/planets/{earth_id}/relationships/star",
                         },
                     },
                 },
-                "links": {"self": "/planets/1"},
+                "links": {"self": f"/planets/{earth_id}"},
             },
             "included": [
                 {
-                    "attributes": {"name": "Sirius", "brightness": 1},
-                    "id": "1",
+                    "id": str(sun_id),
                     "type": "star",
-                    "links": {"self": "/stars/1"},
+                    "attributes": {"name": "Sun", "brightness": 1},
+                    "links": {"self": f"/stars/{sun_id}"},
                     "relationships": {
-                        "galaxy": {
-                            "data": None,
-                            "links": {
-                                "related": "/stars/1/galaxy",
-                                "self": "/stars/1/relationships/galaxy",
-                            },
-                        },
                         "planets": {
                             "data": [
                                 {
                                     "type": "planet",
-                                    "id": "1",
+                                    "id": str(earth_id),
                                 }
                             ],
                             "links": {
-                                "related": "/stars/1/planets",
-                                "self": "/stars/1/relationships/planets",
+                                "related": f"/stars/{sun_id}/planets",
+                                "self": f"/stars/{sun_id}/relationships/planets",
+                            },
+                        },
+                        "galaxy": {
+                            "data": None,
+                            "links": {
+                                "related": f"/stars/{sun_id}/galaxy",
+                                "self": f"/stars/{sun_id}/relationships/galaxy",
                             },
                         },
                     },
                 }
             ],
-            "links": {"self": "/planets/1?include=star"},
+            "links": {"self": f"/planets/{earth_id}?include=star"},
         }
 
 
 class TestList:
-    def test_list(self, session: Session):
-        star = Star(name="Sirius")
-
-        session.add(star)
-        session.commit()
-
+    def test_list(self, session: Session, setup_database: OneTimeData):
         response = client.get(f"/stars")
+
+        sun_id, earth_id = setup_database
 
         assert response.status_code == 200
         assert response.json() == {
             "data": [
                 {
-                    "attributes": {"name": "Sirius", "brightness": 1},
-                    "id": "1",
+                    "id": str(sun_id),
                     "type": "star",
-                    "links": {"self": "/stars/1"},
+                    "attributes": {"name": "Sun", "brightness": 1},
+                    "links": {"self": f"/stars/{sun_id}"},
                     "relationships": {
+                        "planets": {
+                            "data": [
+                                {
+                                    "type": "planet",
+                                    "id": str(earth_id),
+                                }
+                            ],
+                            "links": {
+                                "related": f"/stars/{sun_id}/planets",
+                                "self": f"/stars/{sun_id}/relationships/planets",
+                            },
+                        },
                         "galaxy": {
                             "data": None,
                             "links": {
-                                "related": "/stars/1/galaxy",
-                                "self": "/stars/1/relationships/galaxy",
-                            },
-                        },
-                        "planets": {
-                            "data": [],
-                            "links": {
-                                "related": "/stars/1/planets",
-                                "self": "/stars/1/relationships/planets",
+                                "related": f"/stars/{sun_id}/galaxy",
+                                "self": f"/stars/{sun_id}/relationships/galaxy",
                             },
                         },
                     },
@@ -215,19 +195,25 @@ class TestList:
             "links": {"self": "/stars"},
         }
 
-    def test_include(self, session: Session):
-        galaxy = Galaxy(name="Milky Way")
-        star = Star(name="Sun", galaxy=galaxy)
-        planet = Planet(name="Earth", star=star)
-        hoth = Planet(name="Hoth")
+    def test_include(self, session: Session, setup_database: OneTimeData):
+        sun_id, earth_id = setup_database
 
-        session.add(galaxy)
-        session.add(star)
-        session.add(planet)
-        session.add(hoth)
+        # Add a planet with a new star and a galaxy, so we can test it still works even if
+        # not all objects have the inclusion (so the OneTimeData star doesn't have a galaxy).
+        star_wars_galaxy = Galaxy(name="Far Far Away")
+        priate = Star(name="Priate", galaxy=star_wars_galaxy)
+        mustafar = Planet(name="Mustafar", star=priate)
+
+        # Add another planet with the OneTimeData star, so we can test inclusion are de-duped.
+        mars = Planet(name="Mars", star_id=sun_id)
+
+        session.add(star_wars_galaxy)
+        session.add(priate)
+        session.add(mustafar)
+        session.add(mars)
         session.commit()
 
-        response = client.get(f"/planets?include=star")
+        response = client.get(f"/planets?include=star.galaxy")
 
         assert response.status_code == 200
         assert response.json() == {
@@ -236,46 +222,70 @@ class TestList:
                     "attributes": {
                         "name": "Earth",
                     },
-                    "id": "1",
+                    "id": str(earth_id),
                     "type": "planet",
-                    "links": {"self": "/planets/1"},
+                    "links": {"self": f"/planets/{earth_id}"},
                     "relationships": {
                         "favorite_galaxy": {
                             "data": None,
                             "links": {
-                                "related": "/planets/1/favorite_galaxy",
-                                "self": "/planets/1/relationships/favorite_galaxy",
+                                "related": f"/planets/{earth_id}/favorite_galaxy",
+                                "self": f"/planets/{earth_id}/relationships/favorite_galaxy",
                             },
                         },
                         "star": {
-                            "data": {"id": "1", "type": "star"},
+                            "data": {"id": str(sun_id), "type": "star"},
                             "links": {
-                                "related": "/planets/1/star",
-                                "self": "/planets/1/relationships/star",
+                                "related": f"/planets/{earth_id}/star",
+                                "self": f"/planets/{earth_id}/relationships/star",
                             },
                         },
                     },
                 },
                 {
                     "attributes": {
-                        "name": "Hoth",
+                        "name": "Mustafar",
                     },
                     "id": "2",
                     "type": "planet",
-                    "links": {"self": "/planets/2"},
+                    "links": {"self": f"/planets/{mustafar.id}"},
                     "relationships": {
                         "favorite_galaxy": {
                             "data": None,
                             "links": {
-                                "related": "/planets/2/favorite_galaxy",
-                                "self": "/planets/2/relationships/favorite_galaxy",
+                                "related": f"/planets/{mustafar.id}/favorite_galaxy",
+                                "self": f"/planets/{mustafar.id}/relationships/favorite_galaxy",
                             },
                         },
                         "star": {
+                            "data": {"id": str(priate.id), "type": "star"},
+                            "links": {
+                                "related": f"/planets/{mustafar.id}/star",
+                                "self": f"/planets/{mustafar.id}/relationships/star",
+                            },
+                        },
+                    },
+                },
+                {
+                    "attributes": {
+                        "name": "Mars",
+                    },
+                    "id": str(mars.id),
+                    "type": "planet",
+                    "links": {"self": f"/planets/{mars.id}"},
+                    "relationships": {
+                        "favorite_galaxy": {
                             "data": None,
                             "links": {
-                                "related": "/planets/2/star",
-                                "self": "/planets/2/relationships/star",
+                                "related": f"/planets/{mars.id}/favorite_galaxy",
+                                "self": f"/planets/{mars.id}/relationships/favorite_galaxy",
+                            },
+                        },
+                        "star": {
+                            "data": {"id": str(sun_id), "type": "star"},
+                            "links": {
+                                "related": f"/planets/{mars.id}/star",
+                                "self": f"/planets/{mars.id}/relationships/star",
                             },
                         },
                     },
@@ -284,60 +294,106 @@ class TestList:
             "included": [
                 {
                     "attributes": {"name": "Sun", "brightness": 1},
-                    "id": "1",
+                    "id": str(sun_id),
                     "type": "star",
-                    "links": {"self": "/stars/1"},
+                    "links": {"self": f"/stars/{sun_id}"},
+                    "relationships": {
+                        "galaxy": {
+                            "data": None,
+                            "links": {
+                                "related": f"/stars/{sun_id}/galaxy",
+                                "self": f"/stars/{sun_id}/relationships/galaxy",
+                            },
+                        },
+                        "planets": {
+                            "data": [
+                                {"type": "planet", "id": str(earth_id)},
+                                {"type": "planet", "id": str(mars.id)},
+                            ],
+                            "links": {
+                                "related": f"/stars/{sun_id}/planets",
+                                "self": f"/stars/{sun_id}/relationships/planets",
+                            },
+                        },
+                    },
+                },
+                {
+                    "attributes": {"name": "Priate", "brightness": 1},
+                    "id": str(priate.id),
+                    "type": "star",
+                    "links": {"self": f"/stars/{priate.id}"},
                     "relationships": {
                         "galaxy": {
                             "data": {"type": "galaxy", "id": "1"},
                             "links": {
-                                "related": "/stars/1/galaxy",
-                                "self": "/stars/1/relationships/galaxy",
+                                "related": f"/stars/{priate.id}/galaxy",
+                                "self": f"/stars/{priate.id}/relationships/galaxy",
                             },
                         },
                         "planets": {
-                            "data": [{"type": "planet", "id": "1"}],
+                            "data": [{"type": "planet", "id": str(mustafar.id)}],
                             "links": {
-                                "related": "/stars/1/planets",
-                                "self": "/stars/1/relationships/planets",
+                                "related": f"/stars/{priate.id}/planets",
+                                "self": f"/stars/{priate.id}/relationships/planets",
                             },
                         },
                     },
-                }
+                },
+                {
+                    "attributes": {"name": "Far Far Away"},
+                    "id": str(star_wars_galaxy.id),
+                    "type": "galaxy",
+                    "links": {"self": f"/galaxys/{star_wars_galaxy.id}"},
+                    "relationships": {
+                        "stars": {
+                            "data": [{"type": "star", "id": str(priate.id)}],
+                            "links": {
+                                "related": f"/galaxys/{star_wars_galaxy.id}/stars",
+                                "self": f"/galaxys/{star_wars_galaxy.id}/relationships/stars",
+                            },
+                        },
+                        "favorite_planets": {
+                            "data": [],
+                            "links": {
+                                "related": f"/galaxys/{star_wars_galaxy.id}/favorite_planets",
+                                "self": f"/galaxys/{star_wars_galaxy.id}/relationships/favorite_planets",
+                            },
+                        },
+                    },
+                },
             ],
-            "links": {"self": "/planets?include=star"},
+            "links": {"self": "/planets?include=star.galaxy"},
         }
 
 
 class TestUpdate:
-    def test_update(self, session: Session):
-        star = Star(name="Sirius")
-        galaxy = Galaxy(name="Milky Way")
-        earth = Planet(name="Earth")
-        mars = Planet(name="Mars")
+    def test_update(self, session: Session, setup_database: OneTimeData):
+        sun_id, _ = setup_database
 
-        session.add(star)
+        galaxy = Galaxy(name="Milky Way")
+        mercury = Planet(name="Mercury")
+        jupiter = Planet(name="Jupiter")
+
         session.add(galaxy)
-        session.add(earth)
-        session.add(mars)
+        session.add(mercury)
+        session.add(jupiter)
         session.commit()
-        session.refresh(star)
 
         response = client.patch(
-            f"/stars/{star.id}",
+            f"/stars/{sun_id}",
             json={
                 "data": {
                     "type": "star",
-                    "id": star.id,
+                    "id": str(sun_id),
                     "attributes": {
-                        "name": "Vega",
+                        "name": "Suntastic",
                     },
                     "relationships": {
                         "galaxy": {"data": {"type": "galaxy", "id": galaxy.id}},
                         "planets": {
                             "data": [
-                                {"type": "planet", "id": earth.id},
-                                {"type": "planet", "id": mars.id},
+                                {"type": "planet", "id": mercury.id},
+                                {"type": "planet", "id": jupiter.id},
                             ]
                         },
                     },
@@ -348,32 +404,32 @@ class TestUpdate:
         assert response.status_code == 200
         assert response.json() == {
             "data": {
-                "attributes": {"name": "Vega", "brightness": 1},
-                "id": "1",
+                "attributes": {"name": "Suntastic", "brightness": 1},
+                "id": str(sun_id),
                 "type": "star",
-                "links": {"self": "/stars/1"},
+                "links": {"self": f"/stars/{sun_id}"},
                 "relationships": {
                     "galaxy": {
                         "data": {"type": "galaxy", "id": str(galaxy.id)},
                         "links": {
-                            "related": "/stars/1/galaxy",
-                            "self": "/stars/1/relationships/galaxy",
+                            "related": f"/stars/{sun_id}/galaxy",
+                            "self": f"/stars/{sun_id}/relationships/galaxy",
                         },
                     },
                     "planets": {
                         "data": [
-                            {"id": str(earth.id), "type": "planet"},
-                            {"id": str(mars.id), "type": "planet"},
+                            {"id": str(mercury.id), "type": "planet"},
+                            {"id": str(jupiter.id), "type": "planet"},
                         ],
                         "links": {
-                            "related": "/stars/1/planets",
-                            "self": "/stars/1/relationships/planets",
+                            "related": f"/stars/{sun_id}/planets",
+                            "self": f"/stars/{sun_id}/relationships/planets",
                         },
                     },
                 },
             },
             "included": [],
-            "links": {"self": "/stars/1"},
+            "links": {"self": f"/stars/{sun_id}"},
         }
 
 
@@ -385,22 +441,22 @@ class TestCreate:
         assert response.json() == {
             "data": {
                 "attributes": {"name": "Vega", "brightness": 1},
-                "id": "1",
+                "id": IsStr,
                 "type": "star",
-                "links": {"self": "/stars/1"},
+                "links": {"self": IsStr},
                 "relationships": {
                     "galaxy": {
                         "data": None,
                         "links": {
-                            "related": "/stars/1/galaxy",
-                            "self": "/stars/1/relationships/galaxy",
+                            "related": IsStr,
+                            "self": IsStr,
                         },
                     },
                     "planets": {
                         "data": [],
                         "links": {
-                            "related": "/stars/1/planets",
-                            "self": "/stars/1/relationships/planets",
+                            "related": IsStr,
+                            "self": IsStr,
                         },
                     },
                 },
