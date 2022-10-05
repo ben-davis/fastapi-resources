@@ -16,6 +16,7 @@ from tests.resources.sqlmodel_models import (
     StarResource,
     engine,
 )
+from tests.utils import assert_num_queries
 
 app = FastAPI()
 
@@ -89,6 +90,18 @@ class TestRetrieve:
             "included": [],
             "links": {"self": f"/stars/{sun_id}"},
         }
+
+    def test_performance(self, session: Session, setup_database: OneTimeData):
+        """
+        Even though routers aren't aware of the internals of a resource, we want to make
+        sure that the router is properly sending the preloads to the resource. The easiest
+        and most reliable way to do that is via an integration test here.
+        """
+        sun_id, _ = setup_database
+
+        with assert_num_queries(engine=engine, num=1):
+            response = client.get(f"/stars/{sun_id}")
+            assert response.status_code == 200
 
     def test_include(self, session: Session, setup_database: OneTimeData):
         sun_id, earth_id = setup_database

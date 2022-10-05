@@ -12,6 +12,7 @@ from fastapi_resources.routers import base_router
 from pydantic import create_model
 from pydantic.generics import GenericModel
 from pydantic.main import BaseModel, ModelMetaclass
+from sqlalchemy.orm import MANYTOONE
 
 from .base_router import ResourceRouter
 
@@ -274,6 +275,10 @@ class JSONAPIResourceRouter(ResourceRouter):
         if include:
             inclusions = [inclusion.split(".") for inclusion in include.split(",")]
 
+        for relationship in self.resource_class.get_relationships().values():
+            if relationship.direction != MANYTOONE:
+                inclusions.append([relationship.field])
+
         return self.resource_class(
             inclusions=inclusions, **self.get_resource_kwargs(request=request)
         )
@@ -354,8 +359,6 @@ class JSONAPIResourceRouter(ResourceRouter):
         # ID is a special case, so can ignored
         valid_attributes.remove("id")
 
-        print("YO", obj)
-
         # Filter out relationships attributes
         attributes = {
             key: value
@@ -386,8 +389,14 @@ class JSONAPIResourceRouter(ResourceRouter):
         many = isinstance(rows, list)
         rows = rows if isinstance(rows, list) else [rows]
 
+        include = request.query_params.get("include")
+        inclusions = []
+
+        if include:
+            inclusions = [inclusion.split(".") for inclusion in include.split(",")]
+
         for row in rows:
-            for inclusion in resource.inclusions:
+            for inclusion in inclusions:
                 selected_objs = resource.get_related(obj=row, inclusion=inclusion)
 
                 for selected_obj in selected_objs:
