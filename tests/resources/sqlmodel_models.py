@@ -1,3 +1,4 @@
+import uuid
 from typing import List, Optional
 
 from fastapi_resources.resources import SQLModelResource
@@ -18,7 +19,7 @@ class PlanetBase(SQLModel, registry=registry):
 
 
 class Planet(PlanetBase, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
 
     star: "Star" = Relationship(back_populates="planets")
     favorite_galaxy: "Galaxy" = Relationship(back_populates="favorite_planets")

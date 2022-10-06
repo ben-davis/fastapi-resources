@@ -270,7 +270,7 @@ class TestCreate:
 
         assert star_create.name == "Passed Manually"
         assert len(star_create.planets) == 1
-        assert star_create.planets[0].id == setup_database.earth_id
+        assert str(star_create.planets[0].id) == setup_database.earth_id
 
 
 class TestUpdate:

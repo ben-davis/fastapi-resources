@@ -111,7 +111,7 @@ class TestRetrieve:
         assert response.status_code == 200
         assert response.json() == {
             "data": {
-                "id": "1",
+                "id": earth_id,
                 "attributes": {
                     "name": "Earth",
                 },
@@ -259,7 +259,7 @@ class TestList:
                     "attributes": {
                         "name": "Mustafar",
                     },
-                    "id": "2",
+                    "id": str(mustafar.id),
                     "type": "planet",
                     "links": {"self": f"/planets/{mustafar.id}"},
                     "relationships": {
@@ -405,8 +405,8 @@ class TestUpdate:
                         "galaxy": {"data": {"type": "galaxy", "id": galaxy.id}},
                         "planets": {
                             "data": [
-                                {"type": "planet", "id": mercury.id},
-                                {"type": "planet", "id": jupiter.id},
+                                {"type": "planet", "id": str(mercury.id)},
+                                {"type": "planet", "id": str(jupiter.id)},
                             ]
                         },
                     },

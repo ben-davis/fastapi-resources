@@ -309,7 +309,7 @@ class JSONAPIResourceRouter(ResourceRouter):
             type=resource.registry[
                 relationship_info.schema_with_relationships.schema
             ].name,
-            id=related_obj.id,
+            id=str(related_obj.id),
         )
 
     def build_resource_object_relationships(self, obj: Object, resource: Resource):
@@ -367,7 +367,7 @@ class JSONAPIResourceRouter(ResourceRouter):
         }
 
         resource_object = JAResourceObject(
-            id=obj.id,
+            id=str(obj.id),
             type=resource.name,
             attributes=attributes,
             links=self.build_resource_object_links(id=obj.id, resource=resource),
