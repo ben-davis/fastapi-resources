@@ -62,6 +62,9 @@ class Resource(ResourceProtocol):
 
         self.inclusions = inclusions or []
 
+    def close(self):
+        pass
+
     def _zipped_inclusions_with_resource(
         self, _relationships: Relationships, _inclusion: list[str]
     ) -> list[InclusionWithResource]:

@@ -1,8 +1,19 @@
 import copy
+import operator
 import typing
-from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, ClassVar, Generic, Optional, Protocol, Type, TypeVar
+from pprint import pprint
+from typing import (
+    Any,
+    ClassVar,
+    Generic,
+    Literal,
+    Optional,
+    Protocol,
+    Type,
+    TypedDict,
+    TypeVar,
+)
 
 from fastapi import HTTPException
 from fastapi_resources.resources import base_resource, types
@@ -50,7 +61,7 @@ class SQLResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
 
     engine: ClassVar[Optional[Engine]] = None
 
-    session: Optional[Session]
+    session: Session
 
     registry: dict[Type[SQLModel], type["BaseSQLResource"]] = {}
 
@@ -77,9 +88,6 @@ class SQLResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
         ...
 
     def get_select(self) -> SelectOfScalar[SQLModel]:
-        ...
-
-    def _get_session(self) -> Session:
         ...
 
 
@@ -201,29 +209,23 @@ class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[
 
     def __init__(
         self,
-        session: Optional[Session] = None,
+        session: Session = None,
         inclusions: Optional[types.Inclusions] = None,
         *args,
         **kwargs,
     ):
-        # TODO: Warn about session management if a bound session is provided
-        self.session = session
-
-        if not session:
+        if session:
+            self.session = session
+        else:
             assert self.engine, "A session or an engine must be given."
+            self.session = Session(self.engine)
 
         # TODO: Save the relationships on the instance at instantiation for caching
 
         super().__init__(inclusions=inclusions)
 
-    @contextmanager
-    def _get_session(self):
-        if self.session:
-            yield self.session
-            return
-
-        with Session(self.engine) as session:
-            yield session
+    def close(self):
+        self.session.close()
 
     @classmethod
     def get_relationships(cls) -> Relationships:
@@ -284,11 +286,10 @@ class BaseSQLResource(base_resource.Resource, SQLResourceProtocol[TDb], Generic[
     ) -> SQLModel:
         select = self.get_select()
 
-        with self._get_session() as session:
-            try:
-                return session.exec(select.where(self.Db.id == id)).unique().one()
-            except sa_exceptions.NoResultFound:
-                raise HTTPException(status_code=404, detail=f"{self.name} not found")
+        try:
+            return self.session.exec(select.where(self.Db.id == id)).unique().one()
+        except sa_exceptions.NoResultFound:
+            raise HTTPException(status_code=404, detail=f"{self.name} not found")
 
     def get_related(
         self,
@@ -353,49 +354,45 @@ class CreateResourceMixin:
         for key, value in kwargs.items():
             setattr(row, key, value)
 
-        with self._get_session() as session:
-            session.add(row)
-            session.commit()
+        self.session.add(row)
+        self.session.commit()
 
-            model_relationships = self.get_relationships()
+        model_relationships = self.get_relationships()
 
-            if relationships:
-                save_row = False
+        if relationships:
+            save_row = False
 
-                for field, related_ids in relationships.items():
-                    relationship = model_relationships[field]
-                    direction = relationship.direction
+            for field, related_ids in relationships.items():
+                relationship = model_relationships[field]
+                direction = relationship.direction
 
-                    if direction == ONETOMANY:
-                        assert isinstance(
-                            related_ids, list
-                        ), "A list of IDs must be provided for {field}"
+                if direction == ONETOMANY:
+                    assert isinstance(
+                        related_ids, list
+                    ), "A list of IDs must be provided for {field}"
 
-                        related_resource = self.registry[
-                            relationship.schema_with_relationships.schema
-                        ]
-                        related_db_model = related_resource.Db
-                        new_related_ids = [rid for rid in related_ids]
+                    related_resource = self.registry[
+                        relationship.schema_with_relationships.schema
+                    ]
+                    related_db_model = related_resource.Db
+                    new_related_ids = [rid for rid in related_ids]
 
-                        # Update the related objects
-                        session.execute(
-                            update(related_db_model)
-                            .where(related_db_model.id.in_(new_related_ids))
-                            .values({relationship.update_field: row.id})
-                        )
+                    # Update the related objects
+                    self.session.execute(
+                        update(related_db_model)
+                        .where(related_db_model.id.in_(new_related_ids))
+                        .values({relationship.update_field: row.id})
+                    )
 
-                    elif direction == MANYTOONE:
-                        # Can update locally via a setattr
-                        setattr(row, relationship.update_field, related_ids)
-                        save_row = True
+                elif direction == MANYTOONE:
+                    # Can update locally via a setattr
+                    setattr(row, relationship.update_field, related_ids)
+                    save_row = True
 
-                if save_row:
-                    session.commit()
+            if save_row:
+                self.session.commit()
 
-            # As the row is returned outside of the Session (i.e. it won't be bound
-            # to a session), we want to preselect all the relationships as determined
-            # by the `inclusions` provided when the resource was instantiated.
-            row = self.get_object(id=row.id)
+            self.session.refresh(row)
 
         return row
 
@@ -416,49 +413,47 @@ class UpdateResourceMixin:
 
         model_relationships = self.get_relationships()
 
-        with self._get_session() as session:
-            if relationships:
-                for field, related_ids in relationships.items():
-                    relationship = model_relationships[field]
-                    direction = relationship.direction
+        if relationships:
+            for field, related_ids in relationships.items():
+                relationship = model_relationships[field]
+                direction = relationship.direction
 
-                    if direction == ONETOMANY:
-                        assert isinstance(
-                            related_ids, list
-                        ), "A list of IDs must be provided for {field}"
+                if direction == ONETOMANY:
+                    assert isinstance(
+                        related_ids, list
+                    ), "A list of IDs must be provided for {field}"
 
-                        related_resource = self.registry[
-                            relationship.schema_with_relationships.schema
-                        ]
-                        related_db_model = related_resource.Db
-                        new_related_ids = [rid for rid in related_ids]
+                    related_resource = self.registry[
+                        relationship.schema_with_relationships.schema
+                    ]
+                    related_db_model = related_resource.Db
+                    new_related_ids = [rid for rid in related_ids]
 
-                        # Update the related objects
-                        session.execute(
-                            update(related_db_model)
-                            .where(related_db_model.id.in_(new_related_ids))
-                            .values({relationship.update_field: id})
+                    # Update the related objects
+                    self.session.execute(
+                        update(related_db_model)
+                        .where(related_db_model.id.in_(new_related_ids))
+                        .values({relationship.update_field: id})
+                    )
+
+                    # Detach the old related objects
+                    # NOTE: This will raise if the foreign key is required. Is this OK?
+                    self.session.execute(
+                        update(related_db_model)
+                        .where(
+                            getattr(related_db_model, relationship.update_field) == id,
+                            related_db_model.id.not_in(new_related_ids),
                         )
+                        .values({relationship.update_field: None})
+                    )
 
-                        # Detach the old related objects
-                        # NOTE: This will raise if the foreign key is required. Is this OK?
-                        session.execute(
-                            update(related_db_model)
-                            .where(
-                                getattr(related_db_model, relationship.update_field)
-                                == id,
-                                related_db_model.id.not_in(new_related_ids),
-                            )
-                            .values({relationship.update_field: None})
-                        )
+                elif direction == MANYTOONE:
+                    # Can update locally via a setattr
+                    setattr(row, relationship.update_field, related_ids)
 
-                    elif direction == MANYTOONE:
-                        # Can update locally via a setattr
-                        setattr(row, relationship.update_field, related_ids)
-
-            session.add(row)
-            session.commit()
-            session.refresh(row)
+        self.session.add(row)
+        self.session.commit()
+        self.session.refresh(row)
 
         return row
 
@@ -467,8 +462,7 @@ class ListResourceMixin:
     def list(self: SQLResourceProtocol):
         select = self.get_select()
 
-        with self._get_session() as session:
-            rows = session.exec(select).unique().all()
+        rows = self.session.exec(select).unique().all()
 
         return rows
 
@@ -484,9 +478,8 @@ class DeleteResourceMixin:
     def delete(self: SQLResourceProtocol, *, id: int | str):
         row = self.get_object(id=id)
 
-        with self._get_session() as session:
-            session.delete(row)
-            session.commit()
+        self.session.delete(row)
+        self.session.commit()
 
         return {"ok": True}
 

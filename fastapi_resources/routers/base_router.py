@@ -1,6 +1,7 @@
 import inspect
 from typing import (
     Any,
+    Callable,
     Generic,
     List,
     Optional,
@@ -11,6 +12,7 @@ from typing import (
 )
 
 from fastapi import APIRouter, Request, Response
+from fastapi.routing import APIRoute
 from fastapi_resources.resources.base_resource import Resource
 from fastapi_resources.routers import decorators
 from pydantic import BaseModel
@@ -37,6 +39,21 @@ class Action(Protocol):
         ...
 
 
+class ResourceRoute(APIRoute):
+    def get_route_handler(self) -> Callable:
+        original_route_handler = super().get_route_handler()
+
+        async def custom_route_handler(request: Request) -> Response:
+            response: Response = await original_route_handler(request)
+
+            if resource := getattr(request, "resource", None):
+                resource.close()
+
+            return response
+
+        return custom_route_handler
+
+
 class ResourceRouter(APIRouter, Generic[TResource]):
     resource_class: type[TResource]
 
@@ -46,7 +63,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         resource_class: Optional[type[TResource]] = None,
         **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(route_class=ResourceRoute, **kwargs)
 
         if resource_class:
             self.resource_class = resource_class
@@ -183,7 +200,11 @@ class ResourceRouter(APIRouter, Generic[TResource]):
                 )(func)
 
     def get_resource(self, request: Request):
-        return self.resource_class(**self.get_resource_kwargs(request=request))
+        resource = self.resource_class(**self.get_resource_kwargs(request=request))
+
+        setattr(request, "resource", resource)
+
+        return resource
 
     def get_resource_kwargs(self, request: Request):
         return {}
