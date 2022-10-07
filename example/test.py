@@ -1,14 +1,15 @@
 from typing import List, Optional
 
 from fastapi import FastAPI, Request
+from sqlmodel import Field, Relationship, SQLModel, create_engine
+
 from fastapi_resources import resources, routers
 from fastapi_resources.routers import decorators
-from sqlmodel import Field, Relationship, SQLModel, create_engine
 
 sqlite_file_name = "database.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
 
-engine = create_engine(sqlite_url, echo=True)
+engine = create_engine(sqlite_url, echo=True, connect_args={"check_same_thread": False})
 
 app = FastAPI()
 

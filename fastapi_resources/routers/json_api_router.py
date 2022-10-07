@@ -1,6 +1,11 @@
 from typing import Generic, List, Literal, Optional, Type, TypeVar, Union
 
 from fastapi import Query, Request
+from pydantic import create_model
+from pydantic.generics import GenericModel
+from pydantic.main import BaseModel, ModelMetaclass
+from sqlalchemy.orm import MANYTOONE
+
 from fastapi_resources.resources.base_resource import (
     Object,
     Relationships,
@@ -9,10 +14,6 @@ from fastapi_resources.resources.base_resource import (
 )
 from fastapi_resources.resources.types import Inclusions
 from fastapi_resources.routers import base_router
-from pydantic import create_model
-from pydantic.generics import GenericModel
-from pydantic.main import BaseModel, ModelMetaclass
-from sqlalchemy.orm import MANYTOONE
 
 from .base_router import ResourceRouter
 
@@ -268,7 +269,7 @@ class JSONAPIResourceRouter(ResourceRouter):
 
         return JACreateRequest[Attributes, Relationships, Name]
 
-    def get_resource(self, request: Request):
+    def get_resource_kwargs(self, request: Request):
         inclusions: Inclusions = []
         include = request.query_params.get("include")
 
@@ -278,9 +279,10 @@ class JSONAPIResourceRouter(ResourceRouter):
         for relationship in self.resource_class.get_relationships().values():
             inclusions.append([relationship.field])
 
-        return self.resource_class(
-            inclusions=inclusions, **self.get_resource_kwargs(request=request)
-        )
+        return {
+            **super().get_resource_kwargs(request=request),
+            "inclusions": inclusions,
+        }
 
     def build_document_links(self, request: Request):
         path = request.url.path

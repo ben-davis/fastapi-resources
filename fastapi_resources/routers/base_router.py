@@ -13,9 +13,10 @@ from typing import (
 
 from fastapi import APIRouter, Request, Response
 from fastapi.routing import APIRoute
+from pydantic import BaseModel
+
 from fastapi_resources.resources.base_resource import Resource
 from fastapi_resources.routers import decorators
-from pydantic import BaseModel
 
 
 class TCreatePayload(BaseModel):
@@ -47,6 +48,7 @@ class ResourceRoute(APIRoute):
             response: Response = await original_route_handler(request)
 
             if resource := getattr(request, "resource", None):
+                print("CLOSING")
                 resource.close()
 
             return response
@@ -200,7 +202,8 @@ class ResourceRouter(APIRouter, Generic[TResource]):
                 )(func)
 
     def get_resource(self, request: Request):
-        resource = self.resource_class(**self.get_resource_kwargs(request=request))
+        kwargs = self.get_resource_kwargs(request=request)
+        resource = self.resource_class(**kwargs)
 
         setattr(request, "resource", resource)
 

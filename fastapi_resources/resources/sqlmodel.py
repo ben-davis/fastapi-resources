@@ -16,13 +16,14 @@ from typing import (
 )
 
 from fastapi import HTTPException
-from fastapi_resources.resources import base_resource, types
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import MANYTOONE, ONETOMANY
 from sqlalchemy.orm import exc as sa_exceptions
 from sqlalchemy.orm import joinedload
 from sqlmodel import Session, SQLModel, select, update
 from sqlmodel.sql.expression import SelectOfScalar
+
+from fastapi_resources.resources import base_resource, types
 
 
 @dataclass

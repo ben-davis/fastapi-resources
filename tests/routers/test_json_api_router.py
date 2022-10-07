@@ -4,8 +4,9 @@ import pytest
 from dirty_equals import IsStr
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-from fastapi_resources import routers
 from sqlmodel import Session
+
+from fastapi_resources import routers
 from tests.conftest import OneTimeData
 from tests.resources.sqlmodel_models import (
     Galaxy,
@@ -38,9 +39,14 @@ def session():
     transaction = conn.begin()
     session = Session(bind=conn)
 
+    original_get_resource_kwargs = routers.JSONAPIResourceRouter.get_resource_kwargs
+
     # Patch the SQLResource's session
     def get_resource_kwargs(self: routers.JSONAPIResourceRouter, request: Request):
-        return {"session": session}
+        return {
+            **original_get_resource_kwargs(self=self, request=request),
+            "session": session,
+        }
 
     with patch.object(
         routers.JSONAPIResourceRouter, "get_resource_kwargs", get_resource_kwargs
