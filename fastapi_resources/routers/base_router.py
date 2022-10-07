@@ -48,7 +48,6 @@ class ResourceRoute(APIRoute):
             response: Response = await original_route_handler(request)
 
             if resource := getattr(request, "resource", None):
-                print("CLOSING")
                 resource.close()
 
             return response
