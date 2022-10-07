@@ -7,8 +7,10 @@ from sqlmodel import Field, Relationship, SQLModel, create_engine
 
 registry = sa_registry()
 
-sqlite_url = "sqlite://"
-engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
+sqlite_url = "sqlite+pysqlite://"
+engine = create_engine(
+    sqlite_url, connect_args={"check_same_thread": False}, future=True
+)
 
 
 class PlanetBase(SQLModel, registry=registry):

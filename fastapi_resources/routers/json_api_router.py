@@ -276,8 +276,7 @@ class JSONAPIResourceRouter(ResourceRouter):
             inclusions = [inclusion.split(".") for inclusion in include.split(",")]
 
         for relationship in self.resource_class.get_relationships().values():
-            if relationship.direction != MANYTOONE:
-                inclusions.append([relationship.field])
+            inclusions.append([relationship.field])
 
         return self.resource_class(
             inclusions=inclusions, **self.get_resource_kwargs(request=request)
