@@ -11,7 +11,6 @@ packages = [
 python = "^3.10"
 fastapi = "^0.85.0"
 sqlmodel = "^0.0.8"
-uvicorn = {extras = ["standard"], version = "^0.15.0"}
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.5"
@@ -22,6 +21,7 @@ debugpy = "^1.6.2"
 
 [tool.poetry.group.dev.dependencies]
 dirty-equals = "^0.5.0"
+uvicorn = {extras = ["standard"], version = "^0.15.0"}
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
