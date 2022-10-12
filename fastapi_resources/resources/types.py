@@ -1,15 +1,13 @@
 from typing import Callable, ClassVar, List, Optional, Protocol, Set, Type
 
-from fastapi import Request
-from pydantic.main import BaseModel
+from pydantic import BaseModel
+
+Inclusions = list[list[str]]
 
 
 class RelationshipProtocol(Protocol):
     schema: Type[BaseModel]
     many: bool
-
-
-Inclusions = list[list[str]]
 
 
 class ResourceProtocol(Protocol):
@@ -28,7 +26,6 @@ class ResourceProtocol(Protocol):
     delete: Optional[Callable]
     retrieve: Optional[Callable]
 
-    request: Request
     inclusions: Inclusions
 
     @classmethod

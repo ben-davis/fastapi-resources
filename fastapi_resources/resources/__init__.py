@@ -1,1 +1,1 @@
-from .sqlmodel import SQLModelResource
+from .sqlmodel import *

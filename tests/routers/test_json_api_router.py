@@ -4,9 +4,8 @@ import pytest
 from dirty_equals import IsStr
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-from sqlmodel import Session
-
 from fastapi_resources import routers
+from sqlmodel import Session
 from tests.conftest import OneTimeData
 from tests.resources.sqlmodel_models import (
     Galaxy,
