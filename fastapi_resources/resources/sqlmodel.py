@@ -16,14 +16,13 @@ from typing import (
 )
 
 from fastapi import HTTPException
+from fastapi_resources.resources import base_resource, types
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import MANYTOONE, ONETOMANY
 from sqlalchemy.orm import exc as sa_exceptions
 from sqlalchemy.orm import joinedload
 from sqlmodel import Session, SQLModel, select, update
 from sqlmodel.sql.expression import SelectOfScalar
-
-from fastapi_resources.resources import base_resource, types
 
 
 @dataclass
@@ -92,22 +91,6 @@ class SQLResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
         ...
 
 
-def get_related_schema(annotation: Any):
-    args = typing.get_args(annotation)
-    if args:
-        generic_arg = args[0]
-        if issubclass(generic_arg, SQLModel):
-            # Generic assumes first arg is the model
-            return generic_arg
-
-        raise ValueError("Unsupported generic relationship type. Must be a single arg.")
-
-    if issubclass(annotation, SQLModel):
-        return annotation
-
-    raise ValueError(f"Unsupported relationship type {annotation}")
-
-
 def get_relationships_from_schema(
     schema: Type[SQLModel],
     schema_cache: Optional[
@@ -138,13 +121,14 @@ def get_relationships_from_schema(
 
     for field in relationship_fields:
         annotated_type = annotations[field]
-        related_schema = get_related_schema(annotated_type)
+        sqlalchemy_relationship = getattr(schema, field).property
+        related_schema = sqlalchemy_relationship.mapper.class_
         many = typing.get_origin(annotated_type) == list
 
         # Used to uniquely identify the related schema relative to a parent
         new_parent_key = f"{schema}.{field}"
 
-        sqlalchemy_relationship = getattr(schema, field).property
+        getattr(schema, field).property.mapper.class_
 
         # TODO: Handle MANYTOMANY
         direction = sqlalchemy_relationship.direction
