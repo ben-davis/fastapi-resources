@@ -1,19 +1,6 @@
 import copy
-import operator
-import typing
 from dataclasses import dataclass
-from pprint import pprint
-from typing import (
-    Any,
-    ClassVar,
-    Generic,
-    Literal,
-    Optional,
-    Protocol,
-    Type,
-    TypedDict,
-    TypeVar,
-)
+from typing import ClassVar, Generic, Optional, Protocol, Type, TypeVar
 
 from fastapi import HTTPException
 from fastapi_resources.resources import base_resource, types
@@ -104,7 +91,6 @@ def get_relationships_from_schema(
 ):
     schema_cache = schema_cache or {}
 
-    annotations = typing.get_type_hints(schema)
     relationship_fields = schema.__sqlmodel_relationships__.keys()
     relationships = {}
 
@@ -120,15 +106,12 @@ def get_relationships_from_schema(
     schema_cache[(parent_key, schema)] = parent_schema_with_relationships
 
     for field in relationship_fields:
-        annotated_type = annotations[field]
         sqlalchemy_relationship = getattr(schema, field).property
         related_schema = sqlalchemy_relationship.mapper.class_
-        many = typing.get_origin(annotated_type) == list
+        many = sqlalchemy_relationship.uselist
 
         # Used to uniquely identify the related schema relative to a parent
         new_parent_key = f"{schema}.{field}"
-
-        getattr(schema, field).property.mapper.class_
 
         # TODO: Handle MANYTOMANY
         direction = sqlalchemy_relationship.direction

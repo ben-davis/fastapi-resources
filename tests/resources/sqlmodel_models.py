@@ -1,11 +1,9 @@
-import uuid
 from typing import List, Optional
 
 from fastapi_resources.resources import SQLModelResource
-from sqlalchemy.orm import registry as sa_registry
 from sqlmodel import Field, Relationship, SQLModel, create_engine
 
-registry = sa_registry()
+from .planet import Planet, PlanetCreate, PlanetRead, PlanetUpdate
 
 sqlite_url = "sqlite+pysqlite://"
 engine = create_engine(
@@ -13,33 +11,7 @@ engine = create_engine(
 )
 
 
-class PlanetBase(SQLModel, registry=registry):
-    name: str
-
-    star_id: Optional[int] = Field(default=None, foreign_key="star.id")
-    favorite_galaxy_id: Optional[int] = Field(default=None, foreign_key="galaxy.id")
-
-
-class Planet(PlanetBase, table=True):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-
-    star: "Star" = Relationship(back_populates="planets")
-    favorite_galaxy: "Galaxy" = Relationship(back_populates="favorite_planets")
-
-
-class PlanetCreate(PlanetBase):
-    pass
-
-
-class PlanetRead(PlanetBase):
-    id: int
-
-
-class PlanetUpdate(SQLModel, registry=registry):
-    name: Optional[str] = None
-
-
-class StarBase(SQLModel, registry=registry):
+class StarBase(SQLModel):
     name: str
     brightness: int = 1
 
@@ -62,12 +34,12 @@ class StarRead(StarBase):
     id: int
 
 
-class StarUpdate(SQLModel, registry=registry):
+class StarUpdate(SQLModel):
     name: Optional[str] = None
     brightness: Optional[int] = None
 
 
-class GalaxyBase(SQLModel, registry=registry):
+class GalaxyBase(SQLModel):
     name: str
 
 
@@ -87,7 +59,7 @@ class GalaxyRead(GalaxyBase):
     id: int
 
 
-class GalaxyUpdate(SQLModel, registry=registry):
+class GalaxyUpdate(SQLModel):
     name: Optional[str] = None
 
 
