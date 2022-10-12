@@ -1,4 +1,4 @@
-from typing import Generic, List, Literal, Optional, Type, Union
+from typing import List, Literal, Optional, Type, Union
 
 from fastapi import Query, Request
 from fastapi_resources.resources.base_resource import (
@@ -52,17 +52,16 @@ def get_relationships_schema_for_resource_class(
                         (
                             types.JARelationshipsObjectMany
                             if relationship_info.many
-                            else types.JARelationshipsObjectSingle,
-                            Generic[types.TType],
+                            else types.JARelationshipsObjectSingle
                         )
-                    ),
-                )[
-                    Literal[
-                        resource_class.registry[
-                            relationship_info.schema_with_relationships.schema
-                        ].name
-                    ]
-                ]
+                    )[
+                        Literal[
+                            resource_class.registry[
+                                relationship_info.schema_with_relationships.schema
+                            ].name  # type: ignore
+                        ]
+                    ],
+                )
             ],
             None,
         )
@@ -216,13 +215,10 @@ class JSONAPIResourceRouter(base_router.ResourceRouter):
 
     def build_resource_identifier_object(
         self,
-        related_obj: Optional[Object],
+        related_obj: Object,
         resource: Union[Type[Resource], Resource],
         relationship_info: SQLModelRelationshipInfo,
-    ) -> Optional[types.JAResourceIdentifierObject]:
-        if not related_obj:
-            return None
-
+    ) -> types.JAResourceIdentifierObject:
         return types.JAResourceIdentifierObject(
             type=resource.registry[
                 relationship_info.schema_with_relationships.schema
@@ -251,21 +247,22 @@ class JSONAPIResourceRouter(base_router.ResourceRouter):
                     relationship_info=relationship_info,
                 )
                 for related_obj in resource.get_related(obj, [relationship_name])
+                if related_obj.obj
             ]
 
-            JARelationshipObject = (
-                types.JARelationshipsObjectMany
-                if relationship_info.many
-                else types.JARelationshipsObjectSingle
-            )
-
-            if not relationship_info.many:
+            if relationship_info.many:
+                relationship_object = types.JARelationshipsObjectMany(
+                    links=links,
+                    data=data,
+                )
+            else:
                 data = data[0] if data else None
+                relationship_object = types.JARelationshipsObjectSingle(
+                    links=links,
+                    data=data,
+                )
 
-            relationships[relationship_name] = JARelationshipObject(
-                links=links,
-                data=data,
-            )
+            relationships[relationship_name] = relationship_object
 
         # If the relationship is to-one, then we can include `data`
         # But for to-many, we only include it if it's in inclusions.
@@ -326,16 +323,15 @@ class JSONAPIResourceRouter(base_router.ResourceRouter):
                     ] = self.build_resource_object(obj=obj, resource=related_resource())
 
         data = [self.build_resource_object(obj=row, resource=resource) for row in rows]
-        data = data if many else data[0]
+        included = list(included_resources.values())
 
         # Get top-level resource links
         links = self.build_document_links(request=request)
 
-        ResponseSchema = types.JAResponseList if many else types.JAResponseSingle
+        if many:
+            return types.JAResponseList(data=data, included=included, links=links)
 
-        return ResponseSchema(
-            data=data, included=list(included_resources.values()), links=links
-        )
+        return types.JAResponseSingle(data=data[0], included=included, links=links)
 
     def _parse_request_payload(self, payload: dict):
         # Merge the attributes and relationships into a single update

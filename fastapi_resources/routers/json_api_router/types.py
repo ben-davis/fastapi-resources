@@ -11,7 +11,7 @@ TCreate = TypeVar("TCreate", bound=Object)
 TAttributes = TypeVar("TAttributes")
 TRelationships = TypeVar("TRelationships")
 TIncluded = TypeVar("TIncluded")
-TType = TypeVar("TType")
+TType = TypeVar("TType", bound=str)
 
 
 class TIncludeParam(str):
@@ -21,9 +21,9 @@ class TIncludeParam(str):
 class JALinks(BaseModel):
     """A links-object"""
 
-    self: Optional[str]
+    self: Optional[str] = ""
     # Will be used when relationship endpoints are implemented
-    related: Optional[str]
+    related: Optional[str] = ""
 
 
 class JAResourceIdentifierObject(GenericModel, Generic[TType]):
@@ -33,7 +33,7 @@ class JAResourceIdentifierObject(GenericModel, Generic[TType]):
 
 class JARelationshipsObjectSingle(GenericModel, Generic[TType]):
     links: Optional[JALinks]
-    data: Optional[JAResourceIdentifierObject[TType]]
+    data: Optional[JAResourceIdentifierObject[TType]] = None
 
 
 class JARelationshipsObjectMany(GenericModel, Generic[TType]):
