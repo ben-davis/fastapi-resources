@@ -130,7 +130,7 @@ class BaseSQLResource(
 
         # TODO: Save the relationships on the instance at instantiation for caching
 
-        super().__init__(inclusions=inclusions)
+        super().__init__(inclusions=inclusions, *args, **kwargs)
 
     def close(self):
         self.session.close()

@@ -59,6 +59,7 @@ class ResourceProtocol(Protocol, Generic[TDb, TBaseModel]):
     retrieve: ClassVar[Optional[Callable]] = None
 
     inclusions: Inclusions
+    context: dict = {}
 
     def __init__(*args, **kwargs):
         pass

@@ -30,11 +30,18 @@ class Resource(Generic[TDb]):
 
         return super().__init_subclass__()
 
-    def __init__(self, inclusions: Optional[Inclusions] = None, *args, **kwargs):
+    def __init__(
+        self,
+        inclusions: Optional[Inclusions] = None,
+        context: Optional[dict] = None,
+        *args,
+        **kwargs,
+    ):
         if inclusions:
             self.validate_inclusions(inclusions=inclusions)
 
         self.inclusions = inclusions or []
+        self.context = context or {}
 
     def close(self):
         pass

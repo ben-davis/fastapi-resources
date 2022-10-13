@@ -40,7 +40,7 @@ class CreateResourceMixin:
                 )
 
                 # Do a select to check we have permission
-                related_resource = RelatedResource()
+                related_resource = RelatedResource(context=self.context)
 
                 if related_where := related_resource.get_where():
                     results = self.session.exec(
@@ -107,7 +107,7 @@ class UpdateResourceMixin:
                 )
 
                 # Do a select to check we have permission
-                related_resource = RelatedResource()
+                related_resource = RelatedResource(context=self.context)
 
                 if related_where := related_resource.get_where():
                     results = self.session.exec(

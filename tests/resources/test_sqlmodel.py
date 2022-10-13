@@ -32,6 +32,12 @@ def session():
     conn.close()
 
 
+class TestContext:
+    def test_saves_context(self):
+        resource = GalaxyResource(context={"request": 123})
+        assert resource.context["request"] == 123
+
+
 class TestRelationships:
     def test_inclusion_validation_success(self, session: Session):
         # Validation happens on instantiation
@@ -210,7 +216,7 @@ class TestWhere:
     def test_used_in_update(self, session: Session, setup_database: OneTimeData):
         original_resource = SQLModelResource.registry[Planet]
 
-        resource = StarResource(session=session)
+        resource = StarResource(session=session, context={"request": 123})
 
         # Replace the planet relationship with one that filters
         class FilteredPlanetResource(SQLModelResource):
@@ -219,6 +225,7 @@ class TestWhere:
             Db = Planet
 
             def get_where(self):
+                assert self.context["request"] == 123
                 return [Planet.name == "Hoth"]
 
         SQLModelResource.registry[Planet] = FilteredPlanetResource
@@ -239,7 +246,7 @@ class TestWhere:
     def test_used_in_create(self, session: Session, setup_database: OneTimeData):
         original_resource = SQLModelResource.registry[Planet]
 
-        resource = StarResource(session=session)
+        resource = StarResource(session=session, context={"request": 123})
 
         # Replace the planet relationship with one that filters
         class FilteredPlanetResource(SQLModelResource):
@@ -248,6 +255,7 @@ class TestWhere:
             Db = Planet
 
             def get_where(self):
+                assert self.context["request"] == 123
                 return [Planet.name == "Hoth"]
 
         SQLModelResource.registry[Planet] = FilteredPlanetResource
