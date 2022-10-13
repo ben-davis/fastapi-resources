@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 from typing import ClassVar, Generic, Optional, Protocol, Type, TypeVar
 
-from fastapi_resources.resources import types
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import MANYTOMANY, ONETOMANY
 from sqlmodel import Session, SQLModel
 from sqlmodel.sql.expression import SelectOfScalar
+
+from fastapi_resources.resources import types
 
 Inclusions = types.Inclusions
 
@@ -34,9 +35,8 @@ TDb = TypeVar("TDb", bound=SQLModel)
 class SQLResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
     Db: ClassVar[Type[TDb]]
     Read: ClassVar[Type[SQLModel]]
-
-    Create: ClassVar[Optional[Type[SQLModel]]]
-    Update: ClassVar[Optional[Type[SQLModel]]]
+    Create: ClassVar[Optional[Type[SQLModel]]] = None
+    Update: ClassVar[Optional[Type[SQLModel]]] = None
 
     engine: ClassVar[Optional[Engine]] = None
 

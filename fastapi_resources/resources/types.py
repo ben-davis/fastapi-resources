@@ -1,37 +1,71 @@
-from typing import Callable, ClassVar, List, Optional, Protocol, Set, Type
+from dataclasses import dataclass
+from typing import (
+    Callable,
+    ClassVar,
+    Generic,
+    List,
+    Optional,
+    Protocol,
+    Set,
+    Type,
+    TypeVar,
+)
 
 from pydantic import BaseModel
 
 Inclusions = list[list[str]]
 
 
-class RelationshipProtocol(Protocol):
+TDb = TypeVar("TDb", bound=BaseModel)
+
+
+@dataclass
+class SchemaWithRelationships:
     schema: Type[BaseModel]
+    relationships: "Relationships"
+
+
+@dataclass
+class RelationshipInfo:
+    schema_with_relationships: SchemaWithRelationships
     many: bool
+    field: str
 
 
-class ResourceProtocol(Protocol):
+Relationships = dict[str, RelationshipInfo]
+
+
+@dataclass
+class SelectedObj:
+    obj: BaseModel
+    resource: "ResourceProtocol"
+
+
+class ResourceProtocol(Protocol, Generic[TDb]):
     name: ClassVar[str]
     plural_name: ClassVar[str]
 
-    Db: ClassVar[Type[BaseModel]]
+    Db: ClassVar[Type[TDb]]
     Read: ClassVar[Type[BaseModel]]
 
     Create: ClassVar[Optional[Type[BaseModel]]]
     Update: ClassVar[Optional[Type[BaseModel]]]
 
-    create: Optional[Callable]
-    list: Optional[Callable]
-    update: Optional[Callable]
-    delete: Optional[Callable]
-    retrieve: Optional[Callable]
+    create: ClassVar[Optional[Callable]] = None
+    list: ClassVar[Optional[Callable]] = None
+    update: ClassVar[Optional[Callable]] = None
+    delete: ClassVar[Optional[Callable]] = None
+    retrieve: ClassVar[Optional[Callable]] = None
 
     inclusions: Inclusions
+
+    def __init__(*args, **kwargs):
+        pass
 
     @classmethod
     def get_relationships(
         cls,
-    ) -> dict[str, RelationshipProtocol]:
+    ) -> dict[str, RelationshipInfo]:
         ...
 
     @classmethod
@@ -43,5 +77,5 @@ class ResourceProtocol(Protocol):
         """
         ...
 
-    def get_related(self, obj: BaseModel, inclusion: List[str]) -> List[BaseModel]:
+    def get_related(self, obj: BaseModel, inclusion: List[str]) -> List[SelectedObj]:
         ...

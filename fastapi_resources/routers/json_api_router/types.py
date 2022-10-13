@@ -1,8 +1,12 @@
 from typing import Generic, List, Optional, TypeVar
 
-from fastapi_resources.resources.base_resource import Object
 from pydantic import BaseModel
 from pydantic.generics import GenericModel
+
+
+class Object(BaseModel):
+    id: str
+
 
 TRead = TypeVar("TRead", bound=Object)
 TName = TypeVar("TName", bound=str)

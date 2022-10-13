@@ -1,37 +1,10 @@
 from copy import copy
 from dataclasses import dataclass
-from typing import Optional, Type
+from typing import ClassVar, Generic, Optional, Type
 
 from pydantic.main import BaseModel
 
-from .types import Inclusions, ResourceProtocol
-
-
-class Object(BaseModel):
-    id: str
-
-
-@dataclass
-class SchemaWithRelationships:
-    schema: Type[Object]
-    relationships: "Relationships"
-
-
-@dataclass
-class SQLModelRelationshipInfo:
-    schema_with_relationships: SchemaWithRelationships
-    many: bool
-    field: str
-
-
-# TODO: This needs to not be a SQLModel type
-Relationships = dict[str, SQLModelRelationshipInfo]
-
-
-@dataclass
-class SelectedObj:
-    obj: Object
-    resource: Type["Resource"]
+from .types import Inclusions, Relationships, SelectedObj, TDb
 
 
 @dataclass
@@ -40,11 +13,12 @@ class InclusionWithResource:
     resource: type["Resource"]
 
 
-class Resource(ResourceProtocol):
+class Resource(Generic[TDb]):
     # name: ClassVar[str]
-    # plural_name: ClassVar[Optional[str]]
+    plural_name: ClassVar[Optional[str]]
 
-    registry: dict[Type[Object], type["Resource"]] = {}
+    Db: ClassVar[Type[TDb]]
+    registry: dict[Type[BaseModel], type["Resource"]] = {}
 
     def __init_subclass__(cls) -> None:
         if Db := getattr(cls, "Db", None):
@@ -121,5 +95,5 @@ class Resource(ResourceProtocol):
     def get_attributes(cls) -> set[str]:
         return set(cls.Db.__fields__.keys())
 
-    def get_related(self, obj: Object, inclusion: list[str]) -> list[SelectedObj]:
+    def get_related(self, obj: BaseModel, inclusion: list[str]) -> list[SelectedObj]:
         raise NotImplementedError()

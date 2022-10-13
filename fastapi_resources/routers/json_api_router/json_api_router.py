@@ -1,13 +1,12 @@
-from typing import List, Literal, Optional, Type, Union
+from typing import List, Literal, Optional, Type, TypeVar, Union
 
 from fastapi import Query, Request
-from fastapi_resources.resources.base_resource import (
-    Object,
+from fastapi_resources.resources.types import (
+    Inclusions,
+    RelationshipInfo,
     Relationships,
-    Resource,
-    SQLModelRelationshipInfo,
+    ResourceProtocol,
 )
-from fastapi_resources.resources.types import Inclusions
 from fastapi_resources.routers import base_router
 from pydantic import create_model
 from pydantic.main import BaseModel, ModelMetaclass
@@ -17,8 +16,11 @@ from . import types
 include_query = Query(None, regex=r"^([\w\.]+)(,[\w\.]+)*$")
 
 
+TResource = TypeVar("TResource", bound=ResourceProtocol)
+
+
 def get_schemas_from_relationships(
-    relationships: Relationships, visited: Optional[set[type[Object]]] = None
+    relationships: Relationships, visited: Optional[set[type[types.Object]]] = None
 ) -> list[tuple[str, ModelMetaclass]]:
     schemas: list[tuple[str, ModelMetaclass]] = []
 
@@ -39,7 +41,7 @@ def get_schemas_from_relationships(
 
 
 def get_relationships_schema_for_resource_class(
-    method: str, resource_class: type[Resource]
+    method: str, resource_class: type[TResource]
 ):
     Read = resource_class.Read
 
@@ -78,7 +80,7 @@ def get_relationships_schema_for_resource_class(
 
 
 def get_attributes_model_for_resource_class(
-    method: str, resource_class: type[Resource]
+    method: str, resource_class: type[TResource]
 ):
     Read = resource_class.Read
     Attributes = create_model(f"{Read.__name__}__{method}__Attributes", __base__=Read)
@@ -89,7 +91,7 @@ def get_attributes_model_for_resource_class(
     return Attributes
 
 
-def get_model_for_resource_class(method: str, resource_class: type[Resource]):
+def get_model_for_resource_class(method: str, resource_class: type[TResource]):
     Attributes = get_attributes_model_for_resource_class(
         method=method, resource_class=resource_class
     )
@@ -108,7 +110,7 @@ class JSONAPIResourceRouter(base_router.ResourceRouter):
     def __init__(
         self,
         *,
-        resource_class: type[Resource],
+        resource_class: type[TResource],
         **kwargs,
     ) -> None:
         self.resource_class = resource_class
@@ -209,15 +211,15 @@ class JSONAPIResourceRouter(base_router.ResourceRouter):
         return types.JALinks(self=path)
 
     def build_resource_object_links(
-        self, id: str, resource: Union[Type[Resource], Resource]
+        self, id: str, resource: Union[Type[TResource], TResource]
     ):
         return types.JALinks(self=f"/{resource.plural_name}/{id}")
 
     def build_resource_identifier_object(
         self,
-        related_obj: Object,
-        resource: Union[Type[Resource], Resource],
-        relationship_info: SQLModelRelationshipInfo,
+        related_obj: types.Object,
+        resource: Union[Type[TResource], TResource],
+        relationship_info: RelationshipInfo,
     ) -> types.JAResourceIdentifierObject:
         return types.JAResourceIdentifierObject(
             type=resource.registry[
@@ -226,7 +228,9 @@ class JSONAPIResourceRouter(base_router.ResourceRouter):
             id=str(related_obj.id),
         )
 
-    def build_resource_object_relationships(self, obj: Object, resource: Resource):
+    def build_resource_object_relationships(
+        self, obj: types.Object, resource: TResource
+    ):
         relationships = {}
 
         for (
@@ -268,7 +272,7 @@ class JSONAPIResourceRouter(base_router.ResourceRouter):
         # But for to-many, we only include it if it's in inclusions.
         return relationships
 
-    def build_resource_object(self, obj: Object, resource: Resource):
+    def build_resource_object(self, obj: types.Object, resource: TResource):
         valid_attributes = resource.get_attributes()
 
         # ID is a special case, so can ignored
@@ -295,8 +299,8 @@ class JSONAPIResourceRouter(base_router.ResourceRouter):
 
     def build_response(
         self,
-        rows: Union[Object, list[Object]],
-        resource: Resource,
+        rows: Union[types.Object, list[types.Object]],
+        resource: TResource,
         request: Request,
     ):
         included_resources = {}
@@ -351,12 +355,12 @@ class JSONAPIResourceRouter(base_router.ResourceRouter):
 
         return merged_payload
 
-    def parse_update(self, resource: Resource, update: dict):
+    def parse_update(self, resource: TResource, update: dict):
         return super().parse_update(
             resource, self._parse_request_payload(payload=update)
         )
 
-    def parse_create(self, resource: Resource, create: dict):
+    def parse_create(self, resource: TResource, create: dict):
         return super().parse_update(
             resource, self._parse_request_payload(payload=create)
         )

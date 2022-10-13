@@ -15,7 +15,7 @@ from fastapi import APIRouter, Request, Response
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
-from fastapi_resources.resources.base_resource import Resource
+from fastapi_resources.resources.types import ResourceProtocol
 from fastapi_resources.routers import decorators
 
 
@@ -27,7 +27,7 @@ class TUpdatePayload(BaseModel):
     pass
 
 
-TResource = TypeVar("TResource", bound=Resource)
+TResource = TypeVar("TResource", bound=ResourceProtocol)
 
 
 @runtime_checkable
@@ -213,7 +213,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
 
     def build_response(
         self,
-        resource: Resource,
+        resource: TResource,
         rows: Union[BaseModel, List[BaseModel]],
         request: Request,
     ):
