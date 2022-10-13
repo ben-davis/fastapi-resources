@@ -182,7 +182,7 @@ class TestRelationships:
 
 
 class TestWhere:
-    def test_where_is_used_in_get_object(self, session: Session):
+    def test_used_in_get_object(self, session: Session):
         original_resource = SQLModelResource.registry[Star]
 
         class FilteredStarResource(SQLModelResource[Star]):
@@ -206,6 +206,60 @@ class TestWhere:
 
         # Reset the registry
         SQLModelResource.registry[Star] = original_resource
+
+    def test_used_in_update(self, session: Session, setup_database: OneTimeData):
+        original_resource = SQLModelResource.registry[Planet]
+
+        resource = StarResource(session=session)
+
+        # Replace the planet relationship with one that filters
+        class FilteredPlanetResource(SQLModelResource):
+            engine = engine
+            name = "planet"
+            Db = Planet
+
+            def get_where(self):
+                return [Planet.name == "Hoth"]
+
+        SQLModelResource.registry[Planet] = FilteredPlanetResource
+
+        with pytest.raises(NotFound):
+            resource.update(
+                id=setup_database.sun_id,
+                attributes=StarUpdate(name="Milky Way").dict(exclude_unset=True),
+                relationships={
+                    "planets": [
+                        setup_database.earth_id,
+                    ],
+                },
+            )
+
+        SQLModelResource.registry[Planet] = original_resource
+
+    def test_used_in_create(self, session: Session, setup_database: OneTimeData):
+        original_resource = SQLModelResource.registry[Planet]
+
+        resource = StarResource(session=session)
+
+        # Replace the planet relationship with one that filters
+        class FilteredPlanetResource(SQLModelResource):
+            engine = engine
+            name = "planet"
+            Db = Planet
+
+            def get_where(self):
+                return [Planet.name == "Hoth"]
+
+        SQLModelResource.registry[Planet] = FilteredPlanetResource
+
+        with pytest.raises(NotFound):
+            resource.create(
+                attributes=StarCreate(name="Milky Way").dict(exclude_unset=True),
+                relationships={"planets": [setup_database.earth_id]},
+                name="Passed Manually",
+            )
+
+        SQLModelResource.registry[Planet] = original_resource
 
 
 class TestRetrieve:
@@ -366,7 +420,7 @@ class TestUpdate:
 
         resource = StarResource(session=session)
 
-        star_create = resource.update(
+        star_update = resource.update(
             id=star.id,
             attributes=StarUpdate(name="Milky Way").dict(exclude_unset=True),
             relationships={
@@ -380,7 +434,7 @@ class TestUpdate:
 
         star_db = session.exec(select(Star).where(Star.id == star.id)).one()
 
-        for s in (star_create, star_db):
+        for s in (star_update, star_db):
             assert s.name == "Milky Way"
             assert s.galaxy == milky_way
             assert set(p.id for p in s.planets) == set((earth.id, mars.id))
