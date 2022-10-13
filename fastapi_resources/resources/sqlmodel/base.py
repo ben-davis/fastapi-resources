@@ -1,13 +1,15 @@
 import copy
-from typing import Generic, Optional, Type
+from typing import Any, Generic, Optional, Type
 
 from fastapi import HTTPException
 from sqlalchemy.orm import MANYTOONE
 from sqlalchemy.orm import exc as sa_exceptions
 from sqlalchemy.orm import joinedload
-from sqlmodel import Session, SQLModel, select
+from sqlmodel import Session, SQLModel, select, update
+from sqlmodel.sql.expression import SelectOfScalar
 
 from fastapi_resources.resources import base_resource
+from fastapi_resources.resources.sqlmodel.exceptions import NotFound
 
 from . import types
 
@@ -162,6 +164,10 @@ class BaseSQLResource(
 
         return attributes
 
+    # TODO: Update to a type from sqlalchemy when we require 2.0
+    def get_where(self) -> list[Any]:
+        return []
+
     def get_select(self):
         options = []
         inclusions = self.inclusions or []
@@ -184,7 +190,12 @@ class BaseSQLResource(
 
             options.append(option)
 
-        return select(self.Db).options(*options)
+        select_stmt = select(self.Db).options(*options)
+
+        if where := self.get_where():
+            select_stmt = select_stmt.where(*where)
+
+        return select_stmt
 
     def get_object(
         self,
@@ -195,7 +206,7 @@ class BaseSQLResource(
         try:
             return self.session.exec(select.where(self.Db.id == id)).unique().one()
         except sa_exceptions.NoResultFound:
-            raise HTTPException(status_code=404, detail=f"{self.name} not found")
+            raise NotFound(f"{self.name} not found")
 
     def get_related(
         self,

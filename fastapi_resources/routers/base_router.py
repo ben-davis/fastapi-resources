@@ -11,10 +11,11 @@ from typing import (
     runtime_checkable,
 )
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
+from fastapi_resources.resources.sqlmodel.exceptions import NotFound
 from fastapi_resources.resources.types import ResourceProtocol
 from fastapi_resources.routers import decorators
 
@@ -94,6 +95,12 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             "_create": {TCreatePayload: self.get_create_model()},
             "_update": {TUpdatePayload: self.get_update_model()},
         }
+
+    def api_route(self, *args, **kwargs):
+        try:
+            return super().api_route(*args, **kwargs)
+        except NotFound as e:
+            raise HTTPException(status_code=404, detail=str(e))
 
     def _patch_route_types(self):
         for method_name, replacements in self.method_replacements.items():

@@ -69,6 +69,9 @@ class SQLResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
     def get_select(self) -> SelectOfScalar[TDb]:
         ...
 
+    def get_where(self) -> list[str]:
+        ...
+
 
 @dataclass
 class SelectedObj:

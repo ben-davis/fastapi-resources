@@ -2,6 +2,8 @@ import pytest
 from sqlalchemy.orm import exc as sa_exceptions
 from sqlmodel import Session, select
 
+from fastapi_resources.resources.sqlmodel.exceptions import NotFound
+from fastapi_resources.resources.sqlmodel.resources import SQLModelResource
 from tests.conftest import OneTimeData
 from tests.resources.sqlmodel_models import (
     Galaxy,
@@ -177,6 +179,33 @@ class TestRelationships:
             inclusion=["galaxy"],
         )
         assert related_objects == []
+
+
+class TestWhere:
+    def test_where_is_used_in_get_object(self, session: Session):
+        original_resource = SQLModelResource.registry[Star]
+
+        class FilteredStarResource(SQLModelResource[Star]):
+            engine = engine
+            name = "star"
+            Db = Star
+
+            def get_where(self):
+                return [Star.name == "Gazorbo"]
+
+        star = Star(name="Sirius")
+        session.add(star)
+        session.commit()
+        session.refresh(star)
+
+        assert star.id
+
+        resource = FilteredStarResource(session=session)
+        with pytest.raises(NotFound):
+            resource.retrieve(id=star.id)
+
+        # Reset the registry
+        SQLModelResource.registry[Star] = original_resource
 
 
 class TestRetrieve:

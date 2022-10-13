@@ -1,9 +1,10 @@
 from typing import Optional
 
 from sqlalchemy.orm import MANYTOONE, ONETOMANY
-from sqlmodel import update
+from sqlmodel import select, update
 
 from fastapi_resources.resources.sqlmodel import types
+from fastapi_resources.resources.sqlmodel.exceptions import NotFound
 
 
 class CreateResourceMixin:
@@ -30,27 +31,42 @@ class CreateResourceMixin:
                 relationship = model_relationships[field]
                 direction = relationship.direction
 
+                RelatedResource = self.registry[
+                    relationship.schema_with_relationships.schema
+                ]
+                related_db_model = RelatedResource.Db
+                new_related_ids = (
+                    related_ids if isinstance(related_ids, list) else [related_ids]
+                )
+
+                # Do a select to check we have permission
+                related_resource = RelatedResource()
+
+                if related_where := related_resource.get_where():
+                    results = self.session.exec(
+                        select(related_db_model).where(
+                            related_db_model.id.in_(new_related_ids), *related_where
+                        )
+                    ).all()
+
+                    if len(results) != len(new_related_ids):
+                        raise NotFound()
+
                 if direction == ONETOMANY:
                     assert isinstance(
                         related_ids, list
                     ), "A list of IDs must be provided for {field}"
 
-                    related_resource = self.registry[
-                        relationship.schema_with_relationships.schema
-                    ]
-                    related_db_model = related_resource.Db
-                    new_related_ids = [rid for rid in related_ids]
-
                     # Update the related objects
                     self.session.execute(
                         update(related_db_model)
-                        .where(related_db_model.id.in_(new_related_ids))
+                        .where(related_db_model.id.in_(new_related_ids), *related_where)
                         .values({relationship.update_field: row.id})
                     )
 
                 elif direction == MANYTOONE:
                     # Can update locally via a setattr
-                    setattr(row, relationship.update_field, related_ids)
+                    setattr(row, relationship.update_field, new_related_ids[0])
                     save_row = True
 
             if save_row:
@@ -82,16 +98,31 @@ class UpdateResourceMixin:
                 relationship = model_relationships[field]
                 direction = relationship.direction
 
+                RelatedResource = self.registry[
+                    relationship.schema_with_relationships.schema
+                ]
+                related_db_model = RelatedResource.Db
+                new_related_ids = (
+                    related_ids if isinstance(related_ids, list) else [related_ids]
+                )
+
+                # Do a select to check we have permission
+                related_resource = RelatedResource()
+
+                if related_where := related_resource.get_where():
+                    results = self.session.exec(
+                        select(related_db_model).where(
+                            related_db_model.id.in_(new_related_ids), *related_where
+                        )
+                    ).all()
+
+                    if len(results) != len(new_related_ids):
+                        raise NotFound(f"{related_resource.name} not found")
+
                 if direction == ONETOMANY:
                     assert isinstance(
                         related_ids, list
                     ), "A list of IDs must be provided for {field}"
-
-                    related_resource = self.registry[
-                        relationship.schema_with_relationships.schema
-                    ]
-                    related_db_model = related_resource.Db
-                    new_related_ids = [rid for rid in related_ids]
 
                     # Update the related objects
                     self.session.execute(
