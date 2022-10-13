@@ -1,7 +1,8 @@
 from typing import List, Optional
 
-from fastapi_resources.resources import SQLModelResource
 from sqlmodel import Field, Relationship, SQLModel, create_engine
+
+from fastapi_resources.resources import SQLModelResource
 
 from .planet import Planet, PlanetCreate, PlanetRead, PlanetUpdate
 

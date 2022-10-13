@@ -5,10 +5,11 @@ import pytest
 from dirty_equals import IsInt
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-from fastapi_resources import routers
-from fastapi_resources.routers import decorators
 from pydantic.generics import GenericModel
 from sqlmodel import Session
+
+from fastapi_resources import routers
+from fastapi_resources.routers import decorators
 from tests.conftest import OneTimeData
 from tests.resources.sqlmodel_models import (
     Galaxy,

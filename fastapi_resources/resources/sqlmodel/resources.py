@@ -30,8 +30,8 @@ class SQLModelResource(
     mixins.CreateResourceMixin,
     mixins.UpdateResourceMixin,
     mixins.DeleteResourceMixin,
-    base.BaseSQLResource,
-    types.SQLResourceProtocol,
+    base.BaseSQLResource[types.TDb],
+    types.SQLResourceProtocol[types.TDb],
     Generic[types.TDb],
 ):
     pass

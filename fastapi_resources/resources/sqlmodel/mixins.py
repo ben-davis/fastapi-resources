@@ -1,13 +1,14 @@
 from typing import Optional
 
-from fastapi_resources.resources.sqlmodel import types
 from sqlalchemy.orm import MANYTOONE, ONETOMANY
 from sqlmodel import update
+
+from fastapi_resources.resources.sqlmodel import types
 
 
 class CreateResourceMixin:
     def create(
-        self: types.SQLResourceProtocol,
+        self: types.SQLResourceProtocol[types.TDb],
         attributes: dict,
         relationships: Optional[dict[str, str | int | list[str | int]]] = None,
         **kwargs,
@@ -62,7 +63,7 @@ class CreateResourceMixin:
 
 class UpdateResourceMixin:
     def update(
-        self: types.SQLResourceProtocol,
+        self: types.SQLResourceProtocol[types.TDb],
         *,
         id: int | str,
         attributes: dict,
@@ -122,7 +123,7 @@ class UpdateResourceMixin:
 
 
 class ListResourceMixin:
-    def list(self: types.SQLResourceProtocol):
+    def list(self: types.SQLResourceProtocol[types.TDb]):
         select = self.get_select()
 
         rows = self.session.exec(select).unique().all()
@@ -131,14 +132,14 @@ class ListResourceMixin:
 
 
 class RetrieveResourceMixin:
-    def retrieve(self: types.SQLResourceProtocol, *, id: int | str):
+    def retrieve(self: types.SQLResourceProtocol[types.TDb], *, id: int | str):
         row = self.get_object(id=id)
 
         return row
 
 
 class DeleteResourceMixin:
-    def delete(self: types.SQLResourceProtocol, *, id: int | str):
+    def delete(self: types.SQLResourceProtocol[types.TDb], *, id: int | str):
         row = self.get_object(id=id)
 
         self.session.delete(row)

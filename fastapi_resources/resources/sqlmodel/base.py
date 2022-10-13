@@ -2,11 +2,12 @@ import copy
 from typing import Generic, Optional, Type
 
 from fastapi import HTTPException
-from fastapi_resources.resources import base_resource
 from sqlalchemy.orm import MANYTOONE
 from sqlalchemy.orm import exc as sa_exceptions
 from sqlalchemy.orm import joinedload
 from sqlmodel import Session, SQLModel, select
+
+from fastapi_resources.resources import base_resource
 
 from . import types
 
@@ -100,7 +101,9 @@ def get_relationships_from_schema(
 
 
 class BaseSQLResource(
-    base_resource.Resource, types.SQLResourceProtocol[types.TDb], Generic[types.TDb]
+    base_resource.Resource[types.TDb],
+    types.SQLResourceProtocol[types.TDb],
+    Generic[types.TDb],
 ):
     registry: dict[Type[SQLModel], type["BaseSQLResource"]] = {}
 
@@ -186,7 +189,7 @@ class BaseSQLResource(
     def get_object(
         self,
         id: int | str,
-    ) -> SQLModel:
+    ) -> types.TDb:
         select = self.get_select()
 
         try:
@@ -196,7 +199,7 @@ class BaseSQLResource(
 
     def get_related(
         self,
-        obj: SQLModel,
+        obj: types.TDb,
         inclusion: list[str],
     ) -> list[types.SelectedObj]:
         """Gets related objects based on an Inclusions path."""

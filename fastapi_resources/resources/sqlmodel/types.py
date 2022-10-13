@@ -60,13 +60,13 @@ class SQLResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
         """
         ...
 
-    def get_related(self, obj: SQLModel, inclusion: list[str]) -> list[SQLModel]:
+    def get_related(self, obj: SQLModel, inclusion: list[str]) -> list[TDb]:
         ...
 
-    def get_object(self, id: int | str) -> SQLModel:
+    def get_object(self, id: int | str) -> TDb:
         ...
 
-    def get_select(self) -> SelectOfScalar[SQLModel]:
+    def get_select(self) -> SelectOfScalar[TDb]:
         ...
 
 

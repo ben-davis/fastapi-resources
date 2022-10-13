@@ -17,6 +17,7 @@ Inclusions = list[list[str]]
 
 
 TDb = TypeVar("TDb", bound=BaseModel)
+TBaseModel = TypeVar("TBaseModel", bound=BaseModel)
 
 
 @dataclass
@@ -41,15 +42,15 @@ class SelectedObj:
     resource: "ResourceProtocol"
 
 
-class ResourceProtocol(Protocol, Generic[TDb]):
+class ResourceProtocol(Protocol, Generic[TDb, TBaseModel]):
     name: ClassVar[str]
     plural_name: ClassVar[str]
 
     Db: ClassVar[Type[TDb]]
-    Read: ClassVar[Type[BaseModel]]
+    Read: ClassVar[Type[TBaseModel]]
 
-    Create: ClassVar[Optional[Type[BaseModel]]]
-    Update: ClassVar[Optional[Type[BaseModel]]]
+    Create: ClassVar[Optional[Type[TBaseModel]]]
+    Update: ClassVar[Optional[Type[TBaseModel]]]
 
     create: ClassVar[Optional[Callable]] = None
     list: ClassVar[Optional[Callable]] = None
