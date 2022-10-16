@@ -4,7 +4,7 @@ from sqlmodel import Field, Relationship, SQLModel, create_engine
 
 from fastapi_resources.resources import SQLModelResource
 
-from .planet import Planet, PlanetCreate, PlanetRead, PlanetUpdate
+from .planet import Planet, PlanetCreate, PlanetRead
 
 sqlite_url = "sqlite+pysqlite://"
 engine = create_engine(
@@ -102,7 +102,6 @@ class PlanetResource(SQLModelResource):
     Db = Planet
     Read = PlanetRead
     Create = PlanetCreate
-    Update = PlanetUpdate
 
 
 class StarResource(SQLModelResource[Star]):

@@ -180,6 +180,9 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         return types.JAResponseList[Attributes, Relationships, Name, Included]
 
     def get_update_model(self):
+        if not self.resource_class.Update:
+            return None
+
         Name = Literal[(self.resource_class.name,)]  # type: ignore
 
         Attributes = get_attributes_model_for_model(
@@ -196,6 +199,9 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         return types.JAUpdateRequest[Attributes, Relationships, Name]
 
     def get_create_model(self):
+        if not self.resource_class.Create:
+            return None
+
         Name = Literal[(self.resource_class.name,)]  # type: ignore
 
         Attributes = get_attributes_model_for_model(
