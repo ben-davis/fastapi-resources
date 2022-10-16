@@ -174,7 +174,7 @@ class BaseSQLResource(
     def get_where(self) -> list[Any]:
         return []
 
-    def get_select(self):
+    def get_select_options(self):
         options = []
         inclusions = self.inclusions or []
 
@@ -196,6 +196,10 @@ class BaseSQLResource(
 
             options.append(option)
 
+        return options
+
+    def get_select(self):
+        options = self.get_select_options()
         select_stmt = select(self.Db).options(*options)
 
         if where := self.get_where():
