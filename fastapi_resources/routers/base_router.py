@@ -215,8 +215,11 @@ class ResourceRouter(APIRouter, Generic[TResource]):
 
         return resource
 
-    def get_resource_kwargs(self, request: Request):
+    def get_resource_context(self, request: Request):
         return {"request": request}
+
+    def get_resource_kwargs(self, request: Request):
+        return {"context": self.get_resource_context(request=request)}
 
     def build_response(
         self,
