@@ -80,6 +80,19 @@ class GalaxyUpdate(SQLModel):
     name: Optional[str] = None
 
 
+class Moon(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    planet_id: int = Field(foreign_key="planet.id")
+    planet: Planet = Relationship()
+
+
+class MoonRead(SQLModel):
+    id: int
+    name: str
+    planet: Planet = Relationship()
+
+
 class PlanetResource(SQLModelResource):
     engine = engine
     name = "planet"
@@ -105,3 +118,10 @@ class GalaxyResource(SQLModelResource[Galaxy]):
     Read = GalaxyRead
     Create = GalaxyCreate
     Update = GalaxyUpdate
+
+
+class MoonResource(SQLModelResource[Moon]):
+    engine = engine
+    name = "moon"
+    Db = Moon
+    Read = MoonRead

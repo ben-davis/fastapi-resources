@@ -8,6 +8,7 @@ from tests.conftest import OneTimeData
 from tests.resources.sqlmodel_models import (
     Galaxy,
     GalaxyResource,
+    MoonResource,
     Planet,
     PlanetResource,
     Star,
@@ -363,6 +364,19 @@ class TestCreate:
         assert star_create.name == "Passed Manually"
         assert len(star_create.planets) == 1
         assert str(star_create.planets[0].id) == setup_database.earth_id
+
+    def test_required_relationships(
+        self, session: Session, setup_database: OneTimeData
+    ):
+        resource = MoonResource(session=session)
+
+        moon_create = resource.create(
+            attributes={"name": "Big Moon"},
+            relationships={"planet": [setup_database.earth_id]},
+        )
+
+        assert moon_create.name == "Big Moon"
+        assert moon_create.planet_id == setup_database.earth_id
 
 
 class TestUpdate:

@@ -19,60 +19,66 @@ class CreateResourceMixin:
         for key, value in kwargs.items():
             setattr(row, key, value)
 
+        relationships = relationships or {}
+        model_relationships = self.get_relationships()
+
+        for field, related_ids in relationships.items():
+            relationship = model_relationships[field]
+            direction = relationship.direction
+
+            RelatedResource = self.registry[
+                relationship.schema_with_relationships.schema
+            ]
+            related_db_model = RelatedResource.Db
+            new_related_ids = (
+                related_ids if isinstance(related_ids, list) else [related_ids]
+            )
+
+            # Do a select to check we have permission
+            related_resource = RelatedResource(context=self.context)
+
+            if related_where := related_resource.get_where():
+                results = self.session.exec(
+                    select(related_db_model).where(
+                        related_db_model.id.in_(new_related_ids), *related_where
+                    )
+                ).all()
+
+                if len(results) != len(new_related_ids):
+                    raise NotFound()
+
+            if direction == MANYTOONE:
+                # Can update locally via a setattr
+                setattr(row, relationship.update_field, new_related_ids[0])
+
         self.session.add(row)
         self.session.commit()
 
-        model_relationships = self.get_relationships()
+        # Update many relationships that require a separate update on the relationship table
+        for field, related_ids in relationships.items():
+            relationship = model_relationships[field]
+            direction = relationship.direction
 
-        if relationships:
-            save_row = False
+            if direction != ONETOMANY:
+                continue
 
-            for field, related_ids in relationships.items():
-                relationship = model_relationships[field]
-                direction = relationship.direction
+            assert isinstance(
+                related_ids, list
+            ), "A list of IDs must be provided for {field}"
 
-                RelatedResource = self.registry[
-                    relationship.schema_with_relationships.schema
-                ]
-                related_db_model = RelatedResource.Db
-                new_related_ids = (
-                    related_ids if isinstance(related_ids, list) else [related_ids]
-                )
+            RelatedResource = self.registry[
+                relationship.schema_with_relationships.schema
+            ]
+            related_db_model = RelatedResource.Db
+            related_resource = RelatedResource(context=self.context)
+            related_where = related_resource.get_where()
 
-                # Do a select to check we have permission
-                related_resource = RelatedResource(context=self.context)
-
-                if related_where := related_resource.get_where():
-                    results = self.session.exec(
-                        select(related_db_model).where(
-                            related_db_model.id.in_(new_related_ids), *related_where
-                        )
-                    ).all()
-
-                    if len(results) != len(new_related_ids):
-                        raise NotFound()
-
-                if direction == ONETOMANY:
-                    assert isinstance(
-                        related_ids, list
-                    ), "A list of IDs must be provided for {field}"
-
-                    # Update the related objects
-                    self.session.execute(
-                        update(related_db_model)
-                        .where(related_db_model.id.in_(new_related_ids), *related_where)
-                        .values({relationship.update_field: row.id})
-                    )
-
-                elif direction == MANYTOONE:
-                    # Can update locally via a setattr
-                    setattr(row, relationship.update_field, new_related_ids[0])
-                    save_row = True
-
-            if save_row:
-                self.session.commit()
-
-            self.session.refresh(row)
+            # Update the related objects
+            self.session.execute(
+                update(related_db_model)
+                .where(related_db_model.id.in_(related_ids), *related_where)
+                .values({relationship.update_field: row.id})
+            )
 
         return row
 
