@@ -526,6 +526,44 @@ class TestDelete:
         assert star not in session
 
 
+class TestOptionalRelationships:
+    def test_doesnt_include_relationship_if_on_the_read_model(self, session: Session):
+        galaxy = Galaxy(name="Milky Way")
+        session.add(galaxy)
+        session.commit()
+
+        response = client.get(f"/galaxys/{galaxy.id}")
+
+        # This doesn't include the cluster, even though it's a relationship of the model.
+        assert response.status_code == 200
+        assert response.json() == {
+            "data": {
+                "id": str(galaxy.id),
+                "type": "galaxy",
+                "attributes": {"name": "Milky Way"},
+                "links": {"self": f"/galaxys/{galaxy.id}"},
+                "relationships": {
+                    "favorite_planets": {
+                        "data": [],
+                        "links": {
+                            "related": f"/galaxys/{galaxy.id}/favorite_planets",
+                            "self": f"/galaxys/{galaxy.id}/relationships/favorite_planets",
+                        },
+                    },
+                    "stars": {
+                        "data": [],
+                        "links": {
+                            "related": f"/galaxys/{galaxy.id}/stars",
+                            "self": f"/galaxys/{galaxy.id}/relationships/stars",
+                        },
+                    },
+                },
+            },
+            "included": [],
+            "links": {"self": f"/galaxys/{galaxy.id}"},
+        }
+
+
 class TestSchema:
     def test_include(self):
         schema = app.openapi()

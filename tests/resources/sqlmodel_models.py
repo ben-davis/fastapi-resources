@@ -31,13 +31,22 @@ class StarCreate(StarBase):
     pass
 
 
-class StarRead(StarBase):
+class StarRead(SQLModel):
     id: int
+    name: str
+    brightness: int = 1
+    planets: List[Planet] = Relationship(back_populates="star")
+    galaxy: "Galaxy" = Relationship(back_populates="stars")
 
 
 class StarUpdate(SQLModel):
     name: Optional[str] = None
     brightness: Optional[int] = None
+
+
+class Cluster(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
 
 
 class GalaxyBase(SQLModel):
@@ -51,6 +60,9 @@ class Galaxy(GalaxyBase, table=True):
     stars: List[Star] = Relationship(back_populates="galaxy")
     favorite_planets: List[Planet] = Relationship(back_populates="favorite_galaxy")
 
+    cluster_id: Optional[int] = Field(default=None, foreign_key="cluster.id")
+    cluster: Optional[Cluster] = Relationship()
+
 
 class GalaxyCreate(GalaxyBase):
     pass
@@ -58,6 +70,10 @@ class GalaxyCreate(GalaxyBase):
 
 class GalaxyRead(GalaxyBase):
     id: int
+    name: str
+
+    stars: List[Star] = Relationship(back_populates="galaxy")
+    favorite_planets: List[Planet] = Relationship(back_populates="favorite_galaxy")
 
 
 class GalaxyUpdate(SQLModel):

@@ -134,7 +134,6 @@ class TestRetrieve:
             "id": sun_id,
             "name": "Sun",
             "brightness": 1,
-            "galaxy_id": None,
         }
 
 
@@ -148,7 +147,6 @@ class TestList:
                 "id": setup_database.sun_id,
                 "name": "Sun",
                 "brightness": 1,
-                "galaxy_id": None,
             },
         ]
 
@@ -166,7 +164,6 @@ class TestUpdate:
             "id": star.id,
             "name": "Vega",
             "brightness": 1,
-            "galaxy_id": None,
         }
 
 
@@ -179,7 +176,6 @@ class TestCreate:
             "id": IsInt,
             "name": "Vega",
             "brightness": 1,
-            "galaxy_id": None,
         }
 
 

@@ -146,14 +146,20 @@ class BaseSQLResource(
           - Validate a given inclusion resolves to a relationship (done in the base class)
           - To retrieve all the objects along an inclusion with their schemas
         """
-        return get_relationships_from_schema(schema=cls.Db)
+        read_fields = set(cls.Read.__fields__.keys())
+        read_fields.update(cls.Read.__sqlmodel_relationships__.keys())
+        relationships = get_relationships_from_schema(schema=cls.Db)
+
+        return {
+            name: info for name, info in relationships.items() if name in read_fields
+        }
 
     @classmethod
     def get_attributes(cls) -> set[str]:
         attributes = set()
 
         # These are the fields according to the pydantic model
-        fields = cls.Db.__fields__
+        fields = cls.Read.__fields__
         for field in fields:
             # If the field refers to a foreign key field we skip it as it'll be
             # included in get_relationships.

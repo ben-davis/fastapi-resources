@@ -58,6 +58,11 @@ class Resource(Generic[TDb]):
         relationship_info = _relationships.get(current_inclusion)
         assert relationship_info, f"Invalid inclusion {current_inclusion}"
 
+        if relationship_info.schema_with_relationships.schema not in self.registry:
+            raise Exception(
+                f"Resource not found for relationship {relationship_info.field}"
+            )
+
         resource = self.registry[relationship_info.schema_with_relationships.schema]
 
         zipped_inclusions = [

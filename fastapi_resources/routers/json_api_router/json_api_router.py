@@ -1,6 +1,9 @@
 from typing import List, Literal, Optional, Type, TypeVar, Union
 
 from fastapi import Query, Request
+from pydantic import create_model
+from pydantic.main import BaseModel, ModelMetaclass
+
 from fastapi_resources.resources.types import (
     Inclusions,
     RelationshipInfo,
@@ -8,8 +11,6 @@ from fastapi_resources.resources.types import (
     ResourceProtocol,
 )
 from fastapi_resources.routers import base_router
-from pydantic import create_model
-from pydantic.main import BaseModel, ModelMetaclass
 
 from . import types
 
@@ -68,6 +69,7 @@ def get_relationships_schema_for_resource_class(
             None,
         )
         for relationship_name, relationship_info in resource_class.get_relationships().items()
+        if relationship_info.schema_with_relationships.schema in resource_class.registry
     }
 
     Relationships = create_model(
@@ -106,7 +108,7 @@ def get_model_for_resource_class(method: str, resource_class: type[TResource]):
     ]
 
 
-class JSONAPIResourceRouter(base_router.ResourceRouter):
+class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
     def __init__(
         self,
         *,
@@ -133,6 +135,7 @@ class JSONAPIResourceRouter(base_router.ResourceRouter):
                 resource_class=self.resource_class.registry[schema],
             )
             for field, schema in schemas
+            if schema in self.resource_class.registry
         )
 
     def get_read_response_model(self):

@@ -28,6 +28,9 @@ class PlanetCreate(PlanetBase):
 class PlanetRead(PlanetBase):
     id: int
 
+    star: "Star" = Relationship(back_populates="planets")
+    favorite_galaxy: "Galaxy" = Relationship(back_populates="favorite_planets")
+
 
 class PlanetUpdate(SQLModel):
     name: Optional[str] = None
