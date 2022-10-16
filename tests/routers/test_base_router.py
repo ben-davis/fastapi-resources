@@ -109,9 +109,14 @@ def session():
     transaction = conn.begin()
     session = Session(bind=conn)
 
+    original_get_resource_kwargs = routers.ResourceRouter.get_resource_kwargs
+
     # Patch the SQLResource's session
     def get_resource_kwargs(self: routers.ResourceRouter, request: Request):
-        return {"session": session}
+        return {
+            **original_get_resource_kwargs(self=self, request=request),
+            "session": session,
+        }
 
     with mock.patch.object(
         routers.ResourceRouter, "get_resource_kwargs", get_resource_kwargs

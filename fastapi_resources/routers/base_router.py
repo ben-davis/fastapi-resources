@@ -216,7 +216,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         return resource
 
     def get_resource_kwargs(self, request: Request):
-        return {}
+        return {"request": request}
 
     def build_response(
         self,
