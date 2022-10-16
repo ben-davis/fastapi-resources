@@ -69,7 +69,7 @@ class TestRetrieve:
             "data": {
                 "id": str(sun_id),
                 "type": "star",
-                "attributes": {"name": "Sun", "brightness": 1},
+                "attributes": {"name": "Sun", "brightness": 1, "color": ""},
                 "links": {"self": f"/stars/{sun_id}"},
                 "relationships": {
                     "planets": {
@@ -144,7 +144,7 @@ class TestRetrieve:
                 {
                     "id": str(sun_id),
                     "type": "star",
-                    "attributes": {"name": "Sun", "brightness": 1},
+                    "attributes": {"name": "Sun", "brightness": 1, "color": ""},
                     "links": {"self": f"/stars/{sun_id}"},
                     "relationships": {
                         "planets": {
@@ -185,7 +185,7 @@ class TestList:
                 {
                     "id": str(sun_id),
                     "type": "star",
-                    "attributes": {"name": "Sun", "brightness": 1},
+                    "attributes": {"name": "Sun", "brightness": 1, "color": ""},
                     "links": {"self": f"/stars/{sun_id}"},
                     "relationships": {
                         "planets": {
@@ -312,7 +312,7 @@ class TestList:
             ],
             "included": [
                 {
-                    "attributes": {"name": "Sun", "brightness": 1},
+                    "attributes": {"name": "Sun", "brightness": 1, "color": ""},
                     "id": str(sun_id),
                     "type": "star",
                     "links": {"self": f"/stars/{sun_id}"},
@@ -337,7 +337,7 @@ class TestList:
                     },
                 },
                 {
-                    "attributes": {"name": "Priate", "brightness": 1},
+                    "attributes": {"name": "Priate", "brightness": 1, "color": ""},
                     "id": str(priate.id),
                     "type": "star",
                     "links": {"self": f"/stars/{priate.id}"},
@@ -406,6 +406,9 @@ class TestUpdate:
                     "id": str(sun_id),
                     "attributes": {
                         "name": "Suntastic",
+                        # This is a valid attribute, but is not included in Create, so
+                        # should be ignored.
+                        "color": "red",
                     },
                     "relationships": {
                         "galaxy": {"data": {"type": "galaxy", "id": galaxy.id}},
@@ -423,7 +426,7 @@ class TestUpdate:
         assert response.status_code == 200
         assert response.json() == {
             "data": {
-                "attributes": {"name": "Suntastic", "brightness": 1},
+                "attributes": {"name": "Suntastic", "brightness": 1, "color": ""},
                 "id": str(sun_id),
                 "type": "star",
                 "links": {"self": f"/stars/{sun_id}"},
@@ -467,6 +470,9 @@ class TestCreate:
                     "type": "star",
                     "attributes": {
                         "name": "Vega",
+                        # This is a valid attribute, but is not included in Create, so
+                        # should be ignored.
+                        "color": "red",
                     },
                     "relationships": {
                         "galaxy": {"data": {"type": "galaxy", "id": milky_way.id}},
@@ -488,6 +494,7 @@ class TestCreate:
                 "attributes": {
                     "brightness": 1,
                     "name": "Vega",
+                    "color": "",
                 },
                 "links": {"self": IsStr},
                 "relationships": {

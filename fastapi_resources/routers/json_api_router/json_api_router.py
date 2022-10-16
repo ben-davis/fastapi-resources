@@ -41,16 +41,17 @@ def get_schemas_from_relationships(
     return schemas
 
 
-def get_relationships_schema_for_resource_class(
-    method: str, resource_class: type[TResource]
+def get_relationships_model_for_model(
+    method: str, resource_class: type[TResource], model: type[BaseModel]
 ):
-    Read = resource_class.Read
+    allowed_fields = set(model.__fields__.keys())
+    allowed_fields.update(model.__sqlmodel_relationships__.keys())
 
     RelationshipLinkages = {
         relationship_name: (
             Optional[
                 create_model(
-                    f"{Read.__name__}__{method}__Relationships{relationship_name}",
+                    f"{model.__name__}__{method}__Relationships{relationship_name}",
                     __base__=(
                         (
                             types.JARelationshipsObjectMany
@@ -70,10 +71,11 @@ def get_relationships_schema_for_resource_class(
         )
         for relationship_name, relationship_info in resource_class.get_relationships().items()
         if relationship_info.schema_with_relationships.schema in resource_class.registry
+        and relationship_info.field in allowed_fields
     }
 
     Relationships = create_model(
-        f"{Read.__name__}__{method}__Relationships",
+        f"{model.__name__}__{method}__Relationships",
         **RelationshipLinkages,
         __base__=BaseModel,
     )
@@ -81,24 +83,26 @@ def get_relationships_schema_for_resource_class(
     return Relationships
 
 
-def get_attributes_model_for_resource_class(
-    method: str, resource_class: type[TResource]
+def get_attributes_model_for_model(
+    method: str, model: type[BaseModel], resource_class: type[TResource]
 ):
-    Read = resource_class.Read
-    Attributes = create_model(f"{Read.__name__}__{method}__Attributes", __base__=Read)
+    Attributes = create_model(f"{model.__name__}__{method}__Attributes", __base__=model)
 
     # Remove the ID
-    del Attributes.__fields__["id"]
+    if "id" in Attributes.__fields__:
+        del Attributes.__fields__["id"]
 
     return Attributes
 
 
-def get_model_for_resource_class(method: str, resource_class: type[TResource]):
-    Attributes = get_attributes_model_for_resource_class(
-        method=method, resource_class=resource_class
+def get_model_for_resource_class(
+    method: str, model: type[BaseModel], resource_class: type[TResource]
+):
+    Attributes = get_attributes_model_for_model(
+        method=method, model=model, resource_class=resource_class
     )
-    Relationships = get_relationships_schema_for_resource_class(
-        method=method, resource_class=resource_class
+    Relationships = get_relationships_model_for_model(
+        method=method, model=model, resource_class=resource_class
     )
 
     return types.JAResourceObject[
@@ -133,6 +137,7 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
             get_model_for_resource_class(
                 method=f"{self.prefix}__{method}__included__{field}__{schema.__name__}",
                 resource_class=self.resource_class.registry[schema],
+                model=self.resource_class.registry[schema].Read,
             )
             for field, schema in schemas
             if schema in self.resource_class.registry
@@ -143,11 +148,15 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         Included = List[Union[included_schemas]] if included_schemas else list  # type: ignore
         Name = Literal[(self.resource_class.name,)]  # type: ignore
 
-        Attributes = get_attributes_model_for_resource_class(
-            method="retrieve", resource_class=self.resource_class
+        Attributes = get_attributes_model_for_model(
+            method="retrieve",
+            model=self.resource_class.Read,
+            resource_class=self.resource_class,
         )
-        Relationships = get_relationships_schema_for_resource_class(
-            method="retrieve", resource_class=self.resource_class
+        Relationships = get_relationships_model_for_model(
+            method="retrieve",
+            model=self.resource_class.Read,
+            resource_class=self.resource_class,
         )
 
         return types.JAResponseSingle[Attributes, Relationships, Name, Included]
@@ -157,11 +166,15 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         Included = List[Union[included_schemas]] if included_schemas else list  # type: ignore
         Name = Literal[(self.resource_class.name,)]  # type: ignore
 
-        Attributes = get_attributes_model_for_resource_class(
-            method="list", resource_class=self.resource_class
+        Attributes = get_attributes_model_for_model(
+            method="list",
+            model=self.resource_class.Read,
+            resource_class=self.resource_class,
         )
-        Relationships = get_relationships_schema_for_resource_class(
-            method="list", resource_class=self.resource_class
+        Relationships = get_relationships_model_for_model(
+            method="list",
+            model=self.resource_class.Read,
+            resource_class=self.resource_class,
         )
 
         return types.JAResponseList[Attributes, Relationships, Name, Included]
@@ -169,11 +182,15 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
     def get_update_model(self):
         Name = Literal[(self.resource_class.name,)]  # type: ignore
 
-        Attributes = get_attributes_model_for_resource_class(
-            method="update", resource_class=self.resource_class
+        Attributes = get_attributes_model_for_model(
+            method="update",
+            model=self.resource_class.Update,
+            resource_class=self.resource_class,
         )
-        Relationships = get_relationships_schema_for_resource_class(
-            method="update", resource_class=self.resource_class
+        Relationships = get_relationships_model_for_model(
+            method="update",
+            model=self.resource_class.Update,
+            resource_class=self.resource_class,
         )
 
         return types.JAUpdateRequest[Attributes, Relationships, Name]
@@ -181,11 +198,15 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
     def get_create_model(self):
         Name = Literal[(self.resource_class.name,)]  # type: ignore
 
-        Attributes = get_attributes_model_for_resource_class(
-            method="create", resource_class=self.resource_class
+        Attributes = get_attributes_model_for_model(
+            method="create",
+            model=self.resource_class.Create,
+            resource_class=self.resource_class,
         )
-        Relationships = get_relationships_schema_for_resource_class(
-            method="create", resource_class=self.resource_class
+        Relationships = get_relationships_model_for_model(
+            method="create",
+            model=self.resource_class.Create,
+            resource_class=self.resource_class,
         )
 
         return types.JACreateRequest[Attributes, Relationships, Name]

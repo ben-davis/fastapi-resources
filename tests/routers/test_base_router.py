@@ -139,6 +139,7 @@ class TestRetrieve:
             "id": sun_id,
             "name": "Sun",
             "brightness": 1,
+            "color": "",
         }
 
 
@@ -148,11 +149,7 @@ class TestList:
 
         assert response.status_code == 200
         assert response.json() == [
-            {
-                "id": setup_database.sun_id,
-                "name": "Sun",
-                "brightness": 1,
-            },
+            {"id": setup_database.sun_id, "name": "Sun", "brightness": 1, "color": ""},
         ]
 
 
@@ -169,6 +166,7 @@ class TestUpdate:
             "id": star.id,
             "name": "Vega",
             "brightness": 1,
+            "color": "",
         }
 
 
@@ -181,6 +179,7 @@ class TestCreate:
             "id": IsInt,
             "name": "Vega",
             "brightness": 1,
+            "color": "",
         }
 
 
