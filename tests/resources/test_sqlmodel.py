@@ -377,6 +377,7 @@ class TestCreate:
 
         assert moon_create.name == "Big Moon"
         assert moon_create.planet_id == setup_database.earth_id
+        assert moon_create.planet
 
 
 class TestUpdate:

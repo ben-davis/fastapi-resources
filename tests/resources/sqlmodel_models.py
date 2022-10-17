@@ -86,7 +86,7 @@ class GalaxyUpdate(SQLModel):
 class Moon(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
-    planet_id: int = Field(foreign_key="planet.id")
+    planet_id: str = Field(foreign_key="planet.id")
     planet: Planet = Relationship()
 
 

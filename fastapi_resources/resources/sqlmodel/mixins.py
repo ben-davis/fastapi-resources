@@ -21,6 +21,7 @@ class CreateResourceMixin:
 
         relationships = relationships or {}
         model_relationships = self.get_relationships()
+        did_set_relationship = False
 
         for field, related_ids in relationships.items():
             relationship = model_relationships[field]
@@ -50,6 +51,7 @@ class CreateResourceMixin:
             if direction == MANYTOONE:
                 # Can update locally via a setattr
                 setattr(row, relationship.update_field, new_related_ids[0])
+                did_set_relationship = True
 
         self.session.add(row)
         self.session.commit()
@@ -79,6 +81,11 @@ class CreateResourceMixin:
                 .where(related_db_model.id.in_(related_ids), *related_where)
                 .values({relationship.update_field: row.id})
             )
+
+            did_set_relationship = True
+
+        if did_set_relationship:
+            self.session.refresh(row)
 
         return row
 
