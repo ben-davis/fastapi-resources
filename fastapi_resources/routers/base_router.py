@@ -133,9 +133,9 @@ class ResourceRouter(APIRouter, Generic[TResource]):
 
             # Required to avoid closing over method_name
             def factory(_method_name):
-                def wrapper(*args, **kwargs):
+                async def wrapper(*args, **kwargs):
                     class_method = getattr(self.__class__, _method_name)
-                    return class_method(self, *args, **kwargs)
+                    return await class_method(self, *args, **kwargs)
 
                 return wrapper
 
@@ -279,7 +279,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
 
         return resource.delete(id=id)
 
-    def _retrieve(self, *, id: Union[int, str], request: Request):
+    async def _retrieve(self, *, id: Union[int, str], request: Request):
         resource = self.get_resource(request=request)
         if not resource.retrieve:
             raise NotImplementedError("Resource.retrieve not implemented")
@@ -287,7 +287,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         row = resource.retrieve(id=id)
         return self.build_response(rows=row, resource=resource, request=request)
 
-    def _list(self, *, request: Request):
+    async def _list(self, *, request: Request):
         resource = self.get_resource(request=request)
         if not resource.list:
             raise NotImplementedError("Resource.list not implemented")
@@ -295,7 +295,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         rows = resource.list()
         return self.build_response(rows=rows, resource=resource, request=request)
 
-    def _create(self, *, create: TCreatePayload, request: Request):
+    async def _create(self, *, create: TCreatePayload, request: Request):
         resource = self.get_resource(request=request)
 
         attributes, relationships = self.parse_update(
@@ -311,7 +311,9 @@ class ResourceRouter(APIRouter, Generic[TResource]):
 
         return self.build_response(rows=row, resource=resource, request=request)
 
-    def _update(self, *, id: Union[int, str], update: TUpdatePayload, request: Request):
+    async def _update(
+        self, *, id: Union[int, str], update: TUpdatePayload, request: Request
+    ):
         resource = self.get_resource(request=request)
 
         attributes, relationships = self.parse_update(
@@ -327,7 +329,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
 
         return self.build_response(rows=row, resource=resource, request=request)
 
-    def _delete(self, *, id: Union[int, str], request: Request):
+    async def _delete(self, *, id: Union[int, str], request: Request):
         resource = self.get_resource(request=request)
 
         self.perform_delete(request=request, resource=resource, id=id)

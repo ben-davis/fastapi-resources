@@ -395,28 +395,28 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
             resource, self._parse_request_payload(payload=create)
         )
 
-    def _retrieve(
+    async def _retrieve(
         self,
         *,
         id: Union[int, str],
         request: Request,
         include: Optional[str] = include_query,
     ):
-        return super()._retrieve(id=id, request=request)
+        return await super()._retrieve(id=id, request=request)
 
-    def _list(self, *, request: Request, include: Optional[str] = include_query):
-        return super()._list(request=request)
+    async def _list(self, *, request: Request, include: Optional[str] = include_query):
+        return await super()._list(request=request)
 
-    def _create(
+    async def _create(
         self,
         *,
         create: base_router.TCreatePayload,
         request: Request,
         include: Optional[str] = include_query,
     ):
-        return super()._create(create=create, request=request)
+        return await super()._create(create=create, request=request)
 
-    def _update(
+    async def _update(
         self,
         *,
         id: Union[int, str],
@@ -424,7 +424,7 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         request: Request,
         include: Optional[str] = include_query,
     ):
-        return super()._update(id=id, update=update, request=request)
+        return await super()._update(id=id, update=update, request=request)
 
-    def _delete(self, *, id: Union[int, str], request: Request):
-        return super()._delete(id=id, request=request)
+    async def _delete(self, *, id: Union[int, str], request: Request):
+        return await super()._delete(id=id, request=request)
