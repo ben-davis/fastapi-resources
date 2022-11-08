@@ -1,6 +1,9 @@
-from typing import List, Literal, Optional, Type, TypeVar, Union
+from typing import Callable, List, Literal, Optional, Type, TypeVar, Union
 
-from fastapi import Query, Request
+from fastapi import HTTPException, Query, Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import create_model
 from pydantic.main import BaseModel, ModelMetaclass
 
@@ -112,7 +115,63 @@ def get_model_for_resource_class(
     ]
 
 
+def parse_exception(exception: Exception | RequestValidationError):
+    print("HEYU", exception)
+    if isinstance(exception, RequestValidationError):
+        errors = [
+            {
+                "status": 422,
+                "code": error["type"],
+                "title": error["msg"],
+                "source": f'/{"/".join(str(l) for l in error["loc"])}',
+            }
+            for error in exception.errors()
+        ]
+    elif isinstance(exception, HTTPException):
+        print("HEY")
+        errors = [
+            {
+                "status": exception.status_code,
+                "code": exception.detail,
+                "title": exception.detail,
+            }
+        ]
+    else:
+        errors = [
+            {
+                "status": 500,
+                "code": "unknown_error",
+                "title": "An unknown error occured",
+            }
+        ]
+
+    return {"errors": errors}
+
+
+class JSONAPIResourceRoute(base_router.ResourceRoute):
+    def get_route_handler(self) -> Callable:
+        original_route_handler = super().get_route_handler()
+
+        async def custom_route_handler(request: Request) -> Response:
+            try:
+                response: Response = await original_route_handler(request)
+            except (HTTPException, RequestValidationError) as exc:
+                response = JSONResponse(
+                    status_code=getattr(exc, "status_code", 422),
+                    content=parse_exception(exc),
+                )
+
+            if resource := getattr(request, "resource", None):
+                resource.close()
+
+            return response
+
+        return custom_route_handler
+
+
 class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
+    route_class = JSONAPIResourceRoute
+
     def __init__(
         self,
         *,

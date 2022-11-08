@@ -46,7 +46,10 @@ class ResourceRoute(APIRoute):
         original_route_handler = super().get_route_handler()
 
         async def custom_route_handler(request: Request) -> Response:
-            response: Response = await original_route_handler(request)
+            try:
+                response: Response = await original_route_handler(request)
+            except NotFound as exc:
+                raise HTTPException(status_code=404, detail=str(exc))
 
             if resource := getattr(request, "resource", None):
                 resource.close()
@@ -58,6 +61,7 @@ class ResourceRoute(APIRoute):
 
 class ResourceRouter(APIRouter, Generic[TResource]):
     resource_class: type[TResource]
+    route_class: type[ResourceRoute] = ResourceRoute
 
     def __init__(
         self,
@@ -65,7 +69,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         resource_class: Optional[type[TResource]] = None,
         **kwargs,
     ) -> None:
-        super().__init__(route_class=ResourceRoute, **kwargs)
+        super().__init__(route_class=self.route_class, **kwargs)
 
         if resource_class:
             self.resource_class = resource_class
@@ -95,12 +99,6 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             "_create": {TCreatePayload: self.get_create_model()},
             "_update": {TUpdatePayload: self.get_update_model()},
         }
-
-    def api_route(self, *args, **kwargs):
-        try:
-            return super().api_route(*args, **kwargs)
-        except NotFound as e:
-            raise HTTPException(status_code=404, detail=str(e))
 
     def _patch_route_types(self):
         for method_name, replacements in self.method_replacements.items():

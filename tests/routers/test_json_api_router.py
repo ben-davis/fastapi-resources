@@ -581,3 +581,40 @@ class TestSchema:
             "GalaxyRead___planets__list__included__galaxy__Galaxy__Attributes"
             in schema["components"]["schemas"]
         )
+
+
+class TestErrors:
+    def test_validation_error(self):
+        response = client.post(
+            f"/stars",
+            json={
+                "data": {},
+            },
+        )
+
+        assert response.status_code == 422
+        assert response.json() == {
+            "errors": [
+                {
+                    "code": "value_error.missing",
+                    "source": "/body/data/type",
+                    "status": 422,
+                    "title": "field required",
+                },
+            ]
+        }
+
+    def test_http_exception_error(self, session: Session, setup_database: OneTimeData):
+        response = client.get(
+            f"/stars/123",
+            json={
+                "data": {},
+            },
+        )
+
+        assert response.status_code == 404
+        assert response.json() == {
+            "errors": [
+                {"code": "star not found", "status": 404, "title": "star not found"}
+            ]
+        }
