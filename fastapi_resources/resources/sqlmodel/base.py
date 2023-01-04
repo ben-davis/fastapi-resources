@@ -1,11 +1,11 @@
 import copy
-from typing import Any, Generic, Optional, Type
+from typing import Any, ClassVar, Generic, Optional, Type
 
 from fastapi import HTTPException
 from sqlalchemy.orm import MANYTOONE
 from sqlalchemy.orm import exc as sa_exceptions
 from sqlalchemy.orm import joinedload
-from sqlmodel import Session, SQLModel, select, update
+from sqlmodel import Session, SQLModel, func, select, text, update
 from sqlmodel.sql.expression import SelectOfScalar
 
 from fastapi_resources.resources import base_resource
@@ -109,6 +109,9 @@ class BaseSQLResource(
 ):
     registry: dict[Type[SQLModel], type["BaseSQLResource"]] = {}
 
+    Paginator: ClassVar[Optional[Type[types.PaginatorProtocol]]]
+    paginator: Optional[types.PaginatorProtocol]
+
     def __init_subclass__(cls) -> None:
         if Db := getattr(cls, "Db", None):
             BaseSQLResource.registry[Db] = cls
@@ -119,6 +122,8 @@ class BaseSQLResource(
         self,
         session: Session = None,
         inclusions: Optional[types.Inclusions] = None,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
         *args,
         **kwargs,
     ):
@@ -129,6 +134,9 @@ class BaseSQLResource(
             self.session = Session(self.engine)
 
         # TODO: Save the relationships on the instance at instantiation for caching
+
+        if Paginator := getattr(self, "Paginator", None):
+            self.paginator = Paginator(cursor=cursor, limit=limit)
 
         super().__init__(inclusions=inclusions, *args, **kwargs)
 
@@ -215,6 +223,9 @@ class BaseSQLResource(
             select_stmt = select_stmt.where(*where)
 
         return select_stmt
+
+    def get_count_select(self):
+        return select(func.count("id")).select_from(text(self.Db.__tablename__))
 
     def get_object(
         self,

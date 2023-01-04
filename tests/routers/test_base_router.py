@@ -42,8 +42,8 @@ class FakeJobs:
 
 class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
     # Envelope the response so we can check that actions call build_response
-    def build_response(self, resource, rows, request):
-        data = super().build_response(resource, rows, request)
+    def build_response(self, resource, rows, request, next=None, count=None):
+        data = super().build_response(resource, rows, request, next, count)
         return {"data": data}
 
     def get_read_response_model(self):

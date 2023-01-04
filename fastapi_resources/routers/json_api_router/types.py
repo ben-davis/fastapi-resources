@@ -1,4 +1,4 @@
-from typing import Generic, List, Optional, TypeVar
+from typing import Generic, List, Optional, TypeVar, Union
 
 from pydantic import BaseModel
 from pydantic.generics import GenericModel
@@ -15,6 +15,7 @@ TCreate = TypeVar("TCreate", bound=Object)
 TAttributes = TypeVar("TAttributes")
 TRelationships = TypeVar("TRelationships")
 TIncluded = TypeVar("TIncluded")
+TMeta = TypeVar("TMeta")
 TType = TypeVar("TType", bound=str)
 
 
@@ -28,6 +29,13 @@ class JALinks(BaseModel):
     self: Optional[str] = ""
     # Will be used when relationship endpoints are implemented
     related: Optional[str] = ""
+
+
+class JALinksWithPagination(JALinks):
+    next: Optional[str] = None
+
+
+TLinks = TypeVar("TLinks", bound=Union[JALinks, JALinksWithPagination])
 
 
 class JAResourceIdentifierObject(GenericModel, Generic[TType]):
@@ -83,8 +91,10 @@ class JAResponseSingle(
 
 
 class JAResponseList(
-    GenericModel, Generic[TAttributes, TRelationships, TName, TIncluded]
+    GenericModel,
+    Generic[TAttributes, TRelationships, TName, TIncluded, TMeta, TLinks],
 ):
     data: List[JAResourceObject[TAttributes, TRelationships, TName]]
     included: TIncluded
-    links: JALinks
+    links: TLinks
+    meta: TMeta

@@ -11,6 +11,17 @@ from fastapi_resources.resources import types
 Inclusions = types.Inclusions
 
 
+class PaginatorProtocol(Protocol):
+    def __init__(self, cursor: Optional[str] = None, limit: Optional[int] = None):
+        ...
+
+    def paginate_select(self, select: SelectOfScalar) -> SelectOfScalar:
+        ...
+
+    def get_next(self, count: int) -> Optional[str]:
+        ...
+
+
 @dataclass()
 class SchemaWithRelationships:
     schema: Type[SQLModel]
@@ -44,6 +55,8 @@ class SQLResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
 
     registry: dict[Type[SQLModel], type["SQLResourceProtocol"]] = {}
 
+    Paginator: Optional[PaginatorProtocol]
+
     @classmethod
     def get_relationships(
         cls,
@@ -70,6 +83,9 @@ class SQLResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
         ...
 
     def get_where(self) -> list[str]:
+        ...
+
+    def get_count_select(self) -> SelectOfScalar[TDb]:
         ...
 
 

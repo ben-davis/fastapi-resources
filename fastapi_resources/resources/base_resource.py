@@ -34,6 +34,8 @@ class Resource(Generic[TDb]):
         self,
         inclusions: Optional[Inclusions] = None,
         context: Optional[dict] = None,
+        page: Optional[str] = None,
+        limit: Optional[int] = None,
         *args,
         **kwargs,
     ):

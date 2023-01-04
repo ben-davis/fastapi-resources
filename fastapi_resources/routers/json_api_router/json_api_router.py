@@ -1,7 +1,6 @@
 from typing import Callable, List, Literal, Optional, Type, TypeVar, Union
 
 from fastapi import HTTPException, Query, Request, Response
-from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import create_model
@@ -116,7 +115,6 @@ def get_model_for_resource_class(
 
 
 def parse_exception(exception: Exception | RequestValidationError):
-    print("HEYU", exception)
     if isinstance(exception, RequestValidationError):
         errors = [
             {
@@ -128,7 +126,6 @@ def parse_exception(exception: Exception | RequestValidationError):
             for error in exception.errors()
         ]
     elif isinstance(exception, HTTPException):
-        print("HEY")
         errors = [
             {
                 "status": exception.status_code,
@@ -236,7 +233,16 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
             resource_class=self.resource_class,
         )
 
-        return types.JAResponseList[Attributes, Relationships, Name, Included]
+        has_pagination = hasattr(self.resource_class, "Paginator")
+
+        Meta = create_model(
+            f"{self.resource_class.Read.__name__}__list__Meta", count=(int, ...)
+        )
+        Links = types.JALinksWithPagination if has_pagination else types.JALinks
+
+        return types.JAResponseList[
+            Attributes, Relationships, Name, Included, Meta, Links
+        ]
 
     def get_update_model(self):
         if not self.resource_class.Update:
@@ -286,16 +292,24 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         for relationship in self.resource_class.get_relationships().values():
             inclusions.append([relationship.field])
 
+        limit = request.query_params.get("page[limit]", None)
+        limit = int(limit) if limit else None
+
         return {
             **super().get_resource_kwargs(request=request),
             "inclusions": inclusions,
+            "cursor": request.query_params.get("page[cursor]", None),
+            "limit": limit,
         }
 
-    def build_document_links(self, request: Request):
+    def build_document_links(self, request: Request, next: Optional[str] = None):
         path = request.url.path
 
         if query := request.url.query:
             path = f"{path}?{query}"
+
+        if next:
+            return types.JALinksWithPagination(self=path, next=next)
 
         return types.JALinks(self=path)
 
@@ -391,6 +405,8 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         rows: Union[types.Object, list[types.Object]],
         resource: TResource,
         request: Request,
+        next: Optional[str] = None,
+        count: Optional[int] = None,
     ):
         included_resources = {}
 
@@ -419,10 +435,16 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         included = list(included_resources.values())
 
         # Get top-level resource links
-        links = self.build_document_links(request=request)
+        links = self.build_document_links(request=request, next=next)
+
+        meta = {
+            "count": count,
+        }
 
         if many:
-            return types.JAResponseList(data=data, included=included, links=links)
+            return types.JAResponseList(
+                data=data, included=included, links=links, meta=meta
+            )
 
         return types.JAResponseSingle(data=data[0], included=included, links=links)
 

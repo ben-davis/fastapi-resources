@@ -103,10 +103,10 @@ class TestRetrieve:
         sure that the router is properly sending the preloads to the resource. The easiest
         and most reliable way to do that is via an integration test here.
         """
-        sun_id, _ = setup_database
-
-        with assert_num_queries(engine=engine, num=1):
-            response = client.get(f"/stars/{sun_id}")
+        # SELECT rows
+        # SELECT count
+        with assert_num_queries(engine=engine, num=2):
+            response = client.get(f"/stars")
             assert response.status_code == 200
 
     def test_include(self, session: Session, setup_database: OneTimeData):
@@ -212,6 +212,88 @@ class TestList:
             ],
             "included": [],
             "links": {"self": "/stars"},
+            "meta": {"count": 1},
+        }
+
+    def test_list_pagination(self, session: Session, setup_database: OneTimeData):
+        priate = Star(name="Priate")
+        session.add(priate)
+        session.commit()
+
+        priate_id = priate.id
+
+        response = client.get(f"/stars?page[limit]=1")
+
+        sun_id, earth_id = setup_database
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "data": [
+                {
+                    "id": str(sun_id),
+                    "type": "star",
+                    "attributes": {"name": "Sun", "brightness": 1, "color": ""},
+                    "links": {"self": f"/stars/{sun_id}"},
+                    "relationships": {
+                        "planets": {
+                            "data": [
+                                {
+                                    "type": "planet",
+                                    "id": str(earth_id),
+                                }
+                            ],
+                            "links": {
+                                "related": f"/stars/{sun_id}/planets",
+                                "self": f"/stars/{sun_id}/relationships/planets",
+                            },
+                        },
+                        "galaxy": {
+                            "data": None,
+                            "links": {
+                                "related": f"/stars/{sun_id}/galaxy",
+                                "self": f"/stars/{sun_id}/relationships/galaxy",
+                            },
+                        },
+                    },
+                }
+            ],
+            "included": [],
+            "links": {"self": f"/stars?page%5Blimit%5D=1", "next": "2"},
+            "meta": {"count": 2},
+        }
+
+        # Get the next page
+        response = client.get(f"/stars?page[limit]=1&page[cursor]=2")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "data": [
+                {
+                    "id": str(priate_id),
+                    "type": "star",
+                    "attributes": {"name": "Priate", "brightness": 1, "color": ""},
+                    "links": {"self": f"/stars/{priate_id}"},
+                    "relationships": {
+                        "planets": {
+                            "data": [],
+                            "links": {
+                                "related": f"/stars/{priate_id}/planets",
+                                "self": f"/stars/{priate_id}/relationships/planets",
+                            },
+                        },
+                        "galaxy": {
+                            "data": None,
+                            "links": {
+                                "related": f"/stars/{priate_id}/galaxy",
+                                "self": f"/stars/{priate_id}/relationships/galaxy",
+                            },
+                        },
+                    },
+                }
+            ],
+            "included": [],
+            "links": {"self": f"/stars?page%5Blimit%5D=1&page%5Bcursor%5D=2"},
+            "meta": {"count": 2},
         }
 
     def test_include(self, session: Session, setup_database: OneTimeData):
@@ -382,6 +464,9 @@ class TestList:
                 },
             ],
             "links": {"self": "/planets?include=star.galaxy"},
+            "meta": {
+                "count": 3,
+            },
         }
 
 

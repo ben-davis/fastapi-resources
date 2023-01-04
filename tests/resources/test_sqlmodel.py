@@ -323,12 +323,16 @@ class TestRetrieve:
 class TestList:
     def test_list(self, session: Session):
         resource = StarResource(session=session)
-        star_list = resource.list()
+        star_list, next, count = resource.list()
 
         # Some number of stars will have been created during the session, so as
         # long as some exist, then we're good.
         assert star_list
         assert star_list[0].__tablename__ == "star"
+
+        assert next == None
+        # As we reuse data, this could be anything. It just needs to be non-null.
+        assert count
 
 
 class TestCreate:

@@ -17,8 +17,15 @@ def action(detail: bool, methods: list[methods] = ["get"], **kwargs):
             resource = self.get_resource(request=request)
 
             rows = func(*args, **kwargs)
+            next = None
+            count = None
 
-            return self.build_response(resource=resource, rows=rows, request=request)
+            if not detail:
+                rows, next, count = rows
+
+            return self.build_response(
+                resource=resource, rows=rows, request=request, next=next, count=count
+            )
 
         return wrapped
 

@@ -170,9 +170,20 @@ class ListResourceMixin:
     def list(self: types.SQLResourceProtocol[types.TDb]):
         select = self.get_select()
 
-        rows = self.session.exec(select).unique().all()
+        paginator = getattr(self, "paginator", None)
 
-        return rows
+        if paginator:
+            select = paginator.paginate_select(select)
+
+        rows = self.session.exec(select).unique().all()
+        count = self.session.exec(self.get_count_select()).one()
+
+        next = None
+
+        if paginator:
+            next = paginator.get_next(count=count)
+
+        return rows, next, count
 
 
 class RetrieveResourceMixin:

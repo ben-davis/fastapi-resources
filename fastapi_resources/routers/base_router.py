@@ -224,6 +224,8 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         resource: TResource,
         rows: Union[BaseModel, List[BaseModel]],
         request: Request,
+        next: Optional[str] = None,
+        count: Optional[int] = None,
     ):
         return rows
 
@@ -290,8 +292,12 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         if not resource.list:
             raise NotImplementedError("Resource.list not implemented")
 
-        rows = resource.list()
-        return self.build_response(rows=rows, resource=resource, request=request)
+        # Next and count are ignored in the base router
+        rows, next, count = resource.list()
+
+        return self.build_response(
+            rows=rows, resource=resource, request=request, count=count, next=next
+        )
 
     async def _create(self, *, create: TCreatePayload, request: Request):
         resource = self.get_resource(request=request)

@@ -3,6 +3,7 @@ from typing import List, Optional
 from sqlmodel import Field, Relationship, SQLModel, create_engine
 
 from fastapi_resources.resources import SQLModelResource
+from fastapi_resources.resources.sqlmodel import paginators
 
 from .planet import Planet, PlanetCreate, PlanetRead
 
@@ -111,6 +112,7 @@ class StarResource(SQLModelResource[Star]):
     Read = StarRead
     Create = StarCreate
     Update = StarUpdate
+    Paginator = paginators.LimitOffsetPaginator
 
 
 class GalaxyResource(SQLModelResource[Galaxy]):
