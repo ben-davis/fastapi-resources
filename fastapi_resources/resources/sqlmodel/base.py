@@ -232,8 +232,10 @@ class BaseSQLResource(
 
         if where := self.get_where():
             select_stmt = select_stmt.where(*where)
+        else:
+            select_stmt = select_stmt.select_from(text(self.Db.__tablename__))
 
-        return select_stmt.select_from(text(self.Db.__tablename__))
+        return select_stmt
 
     def get_object(
         self,

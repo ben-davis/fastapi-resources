@@ -296,6 +296,48 @@ class TestList:
             "meta": {"count": 2},
         }
 
+    def test_list_pagination_with_filters(
+        self, session: Session, setup_database: OneTimeData
+    ):
+        priate = Star(name="Priate")
+        session.add(priate)
+        session.commit()
+
+        priate_id = priate.id
+
+        response = client.get(f"/stars?page[limit]=1&filter[name]=Priate")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "data": [
+                {
+                    "id": str(priate_id),
+                    "type": "star",
+                    "attributes": {"name": "Priate", "brightness": 1, "color": ""},
+                    "links": {"self": f"/stars/{priate_id}"},
+                    "relationships": {
+                        "planets": {
+                            "data": [],
+                            "links": {
+                                "related": f"/stars/{priate_id}/planets",
+                                "self": f"/stars/{priate_id}/relationships/planets",
+                            },
+                        },
+                        "galaxy": {
+                            "data": None,
+                            "links": {
+                                "related": f"/stars/{priate_id}/galaxy",
+                                "self": f"/stars/{priate_id}/relationships/galaxy",
+                            },
+                        },
+                    },
+                }
+            ],
+            "included": [],
+            "links": {"self": f"/stars?page%5Blimit%5D=1&filter%5Bname%5D=Priate"},
+            "meta": {"count": 1},
+        }
+
     def test_include(self, session: Session, setup_database: OneTimeData):
         sun_id, earth_id = setup_database
 
