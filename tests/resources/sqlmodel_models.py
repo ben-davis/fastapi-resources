@@ -114,11 +114,18 @@ class StarResource(SQLModelResource[Star]):
     Update = StarUpdate
     Paginator = paginators.LimitOffsetPaginator
 
+    def get_joins(self):
+        request = self.context.get("request")
+        if request and request.query_params.get("filter[galaxy.name]"):
+            return [Star.galaxy]
+
+        return super().get_joins()
+
     def get_where(self):
         request = self.context.get("request")
 
-        if request and (name := request.query_params.get("filter[name]")):
-            return [Star.name == name]
+        if request and (galaxy_name := request.query_params.get("filter[galaxy.name]")):
+            return [Galaxy.name == galaxy_name]
 
         return []
 

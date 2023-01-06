@@ -4,7 +4,7 @@ import pytest
 from dirty_equals import IsStr
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from fastapi_resources import routers
 from tests.conftest import OneTimeData
@@ -299,13 +299,29 @@ class TestList:
     def test_list_pagination_with_filters(
         self, session: Session, setup_database: OneTimeData
     ):
-        priate = Star(name="Priate")
-        session.add(priate)
+        galaxy = Galaxy(name="StarWars")
+
+        priate = Star(name="Priate", galaxy=galaxy)
+        hoth = Star(name="Hoth", galaxy=galaxy)
+        session.add_all([priate, hoth, galaxy])
         session.commit()
+        session.refresh(galaxy)
+        session.refresh(priate)
+        session.refresh(hoth)
 
         priate_id = priate.id
+        hoth_id = hoth.id
+        star_wars_id = galaxy.id
+        print(star_wars_id)
 
-        response = client.get(f"/stars?page[limit]=1&filter[name]=Priate")
+        response = client.get(f"/stars?page[limit]=1&filter[galaxy.name]={galaxy.name}")
+
+        print(
+            "CUNT",
+            session.exec(
+                select(Star).where(Galaxy.id == galaxy.id).join(Star.galaxy)
+            ).all(),
+        )
 
         assert response.status_code == 200
         assert response.json() == {
@@ -324,18 +340,21 @@ class TestList:
                             },
                         },
                         "galaxy": {
-                            "data": None,
+                            "data": {"type": "galaxy", "id": str(star_wars_id)},
                             "links": {
                                 "related": f"/stars/{priate_id}/galaxy",
                                 "self": f"/stars/{priate_id}/relationships/galaxy",
                             },
                         },
                     },
-                }
+                },
             ],
             "included": [],
-            "links": {"self": f"/stars?page%5Blimit%5D=1&filter%5Bname%5D=Priate"},
-            "meta": {"count": 1},
+            "links": {
+                "self": f"/stars?page%5Blimit%5D=1&filter%5Bgalaxy.name%5D={galaxy.name}",
+                "next": "2",
+            },
+            "meta": {"count": 2},
         }
 
     def test_include(self, session: Session, setup_database: OneTimeData):

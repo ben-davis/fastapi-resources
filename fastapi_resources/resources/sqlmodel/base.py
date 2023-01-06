@@ -225,15 +225,13 @@ class BaseSQLResource(
         return select_stmt
 
     def get_count_select(self):
-        select_stmt = select(func.count("id"))
+        select_stmt = select(func.count(self.Db.id))
 
-        if options := self.get_options():
-            select_stmt = select_stmt.options(*options)
+        for join in self.get_joins():
+            select_stmt = select_stmt.join(join)
 
         if where := self.get_where():
             select_stmt = select_stmt.where(*where)
-        else:
-            select_stmt = select_stmt.select_from(text(self.Db.__tablename__))
 
         return select_stmt
 
