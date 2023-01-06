@@ -97,6 +97,15 @@ class MoonRead(SQLModel):
     planet: Planet = Relationship()
 
 
+class Asteroid(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+
+
+class AsteroidRead(SQLModel):
+    id: str = Field(alias="name")
+
+
 class PlanetResource(SQLModelResource):
     engine = engine
     name = "planet"
@@ -144,3 +153,11 @@ class MoonResource(SQLModelResource[Moon]):
     name = "moon"
     Db = Moon
     Read = MoonRead
+
+
+class AsteroidResource(SQLModelResource[Asteroid]):
+    engine = engine
+    name = "asteroid"
+    Db = Asteroid
+    Read = AsteroidRead
+    id_field = "name"

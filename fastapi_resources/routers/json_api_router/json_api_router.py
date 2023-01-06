@@ -377,22 +377,26 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
 
     def build_resource_object(self, obj: types.Object, resource: TResource):
         valid_attributes = resource.get_attributes()
+        pydantic_object = resource.Read.from_orm(obj)
 
         # ID is a special case, so can ignored
-        valid_attributes.remove("id")
+        if "id" in valid_attributes:
+            valid_attributes.remove("id")
 
         # Filter out relationships attributes
         attributes = {
             key: value
-            for key, value in resource.Read.from_orm(obj).dict().items()
+            for key, value in pydantic_object.dict().items()
             if key in valid_attributes
         }
 
         resource_object = types.JAResourceObject(
-            id=str(obj.id),
+            id=pydantic_object.id,
             type=resource.name,
             attributes=attributes,
-            links=self.build_resource_object_links(id=obj.id, resource=resource),
+            links=self.build_resource_object_links(
+                id=pydantic_object.id, resource=resource
+            ),
             relationships=self.build_resource_object_relationships(
                 obj=obj, resource=resource
             ),

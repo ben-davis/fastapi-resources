@@ -112,6 +112,8 @@ class BaseSQLResource(
     Paginator: ClassVar[Optional[Type[types.PaginatorProtocol]]]
     paginator: Optional[types.PaginatorProtocol]
 
+    id_field: Optional[str] = None
+
     def __init_subclass__(cls) -> None:
         if Db := getattr(cls, "Db", None):
             BaseSQLResource.registry[Db] = cls
@@ -167,7 +169,7 @@ class BaseSQLResource(
         attributes = set()
 
         # These are the fields according to the pydantic model
-        fields = cls.Read.__fields__
+        fields = cls.Read.schema().get("properties", {})
         for field in fields:
             # If the field refers to a foreign key field we skip it as it'll be
             # included in get_relationships.
@@ -241,8 +243,10 @@ class BaseSQLResource(
     ) -> types.TDb:
         select = self.get_select()
 
+        id_field = getattr(self.Db, self.id_field or "id")
+
         try:
-            return self.session.exec(select.where(self.Db.id == id)).unique().one()
+            return self.session.exec(select.where(id_field == id)).unique().one()
         except sa_exceptions.NoResultFound:
             raise NotFound(f"{self.name} not found")
 

@@ -9,6 +9,8 @@ from sqlmodel import Session, select
 from fastapi_resources import routers
 from tests.conftest import OneTimeData
 from tests.resources.sqlmodel_models import (
+    Asteroid,
+    AsteroidResource,
     Galaxy,
     GalaxyResource,
     Planet,
@@ -24,10 +26,12 @@ app = FastAPI()
 planet_router = routers.JSONAPIResourceRouter(resource_class=PlanetResource)
 star_router = routers.JSONAPIResourceRouter(resource_class=StarResource)
 galaxy_router = routers.JSONAPIResourceRouter(resource_class=GalaxyResource)
+asteroid_router = routers.JSONAPIResourceRouter(resource_class=AsteroidResource)
 
 app.include_router(planet_router)
 app.include_router(star_router)
 app.include_router(galaxy_router)
+app.include_router(asteroid_router)
 
 
 client = TestClient(app)
@@ -95,6 +99,28 @@ class TestRetrieve:
             },
             "included": [],
             "links": {"self": f"/stars/{sun_id}"},
+        }
+
+    def test_retrieve_by_aliased_id(
+        self, session: Session, setup_database: OneTimeData
+    ):
+        asteroid = Asteroid(name="big")
+        session.add(asteroid)
+        session.commit()
+
+        response = client.get(f"/asteroids/big")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "data": {
+                "id": "big",
+                "type": "asteroid",
+                "attributes": {},
+                "links": {"self": f"/asteroids/big"},
+                "relationships": {},
+            },
+            "included": [],
+            "links": {"self": f"/asteroids/big"},
         }
 
     def test_performance(self, session: Session, setup_database: OneTimeData):
