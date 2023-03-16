@@ -1,6 +1,6 @@
 from typing import Callable, List, Literal, Optional, Type, TypeVar, Union
 
-from fastapi import HTTPException, Query, Request, Response
+from fastapi import BackgroundTasks, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import create_model
@@ -498,8 +498,11 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         create: base_router.TCreatePayload,
         request: Request,
         include: Optional[str] = include_query,
+        background_tasks: BackgroundTasks,
     ):
-        return await super()._create(create=create, request=request)
+        return await super()._create(
+            create=create, request=request, background_tasks=background_tasks
+        )
 
     async def _update(
         self,
@@ -508,8 +511,19 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         update: base_router.TUpdatePayload,
         request: Request,
         include: Optional[str] = include_query,
+        background_tasks: BackgroundTasks,
     ):
-        return await super()._update(id=id, update=update, request=request)
+        return await super()._update(
+            id=id, update=update, request=request, background_tasks=background_tasks
+        )
 
-    async def _delete(self, *, id: Union[int, str], request: Request):
-        return await super()._delete(id=id, request=request)
+    async def _delete(
+        self,
+        *,
+        id: Union[int, str],
+        request: Request,
+        background_tasks: BackgroundTasks,
+    ):
+        return await super()._delete(
+            id=id, request=request, background_tasks=background_tasks
+        )

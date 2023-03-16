@@ -11,7 +11,7 @@ from typing import (
     runtime_checkable,
 )
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
@@ -299,7 +299,13 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             rows=rows, resource=resource, request=request, count=count, next=next
         )
 
-    async def _create(self, *, create: TCreatePayload, request: Request):
+    async def _create(
+        self,
+        *,
+        create: TCreatePayload,
+        request: Request,
+        background_tasks: BackgroundTasks,
+    ):
         resource = self.get_resource(request=request)
 
         attributes, relationships = self.parse_update(
@@ -313,10 +319,25 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             relationships=relationships,
         )
 
+        if isinstance(row, tuple):
+            row, *partials = row
+
+            for partial in partials:
+                background_tasks.add_task(
+                    partial.func,
+                    *partial.args,
+                    **partial.keywords,
+                )
+
         return self.build_response(rows=row, resource=resource, request=request)
 
     async def _update(
-        self, *, id: Union[int, str], update: TUpdatePayload, request: Request
+        self,
+        *,
+        id: Union[int, str],
+        update: TUpdatePayload,
+        request: Request,
+        background_tasks: BackgroundTasks,
     ):
         resource = self.get_resource(request=request)
 
@@ -331,11 +352,35 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             id=id,
         )
 
+        if isinstance(row, tuple):
+            row, *partials = row
+
+            for partial in partials:
+                background_tasks.add_task(
+                    partial.func,
+                    *partial.args,
+                    **partial.keywords,
+                )
+
         return self.build_response(rows=row, resource=resource, request=request)
 
-    async def _delete(self, *, id: Union[int, str], request: Request):
+    async def _delete(
+        self,
+        *,
+        id: Union[int, str],
+        request: Request,
+        background_tasks: BackgroundTasks,
+    ):
         resource = self.get_resource(request=request)
 
-        self.perform_delete(request=request, resource=resource, id=id)
+        partials = self.perform_delete(request=request, resource=resource, id=id)
+
+        if isinstance(partials, tuple):
+            for partial in partials:
+                background_tasks.add_task(
+                    partial.func,
+                    *partial.args,
+                    **partial.keywords,
+                )
 
         return Response(status_code=204)

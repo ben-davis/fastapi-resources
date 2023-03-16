@@ -1,3 +1,4 @@
+import functools
 from typing import Generic, TypeVar
 from unittest import mock
 
@@ -36,7 +37,7 @@ class Envelope(GenericModel, Generic[T]):
 
 class FakeJobs:
     @staticmethod
-    def do_something():
+    def do_something(arg: int = 1):
         pass
 
 
@@ -74,9 +75,15 @@ class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
         relationships: dict,
     ):
         attributes["name"] = "ProvidedByPerformUpdate"
-        return resource.update(
+
+        update = resource.update(
             id=id, attributes=attributes, relationships=relationships
         )
+
+        if request.query_params.get("background"):
+            return update, functools.partial(FakeJobs.do_something, arg=10)
+
+        return update
 
     def perform_create(
         self,
@@ -86,7 +93,13 @@ class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
         relationships: dict,
     ):
         attributes["name"] = "ProvidedByPerformCreate"
-        return resource.create(attributes=attributes, relationships=relationships)
+
+        galaxy = resource.create(attributes=attributes, relationships=relationships)
+
+        if request.query_params.get("background"):
+            return galaxy, functools.partial(FakeJobs.do_something, arg=10)
+
+        return galaxy
 
     def perform_delete(self, request: Request, resource: GalaxyResource, id: int):
         FakeJobs.do_something()
@@ -226,6 +239,15 @@ class TestPerformHooks:
         assert response.status_code == 201
         assert response.json()["data"]["name"] == "ProvidedByPerformCreate"
 
+    def test_perform_create_with_background(self, session: Session):
+        with mock.patch.object(FakeJobs, "do_something") as patched_fake_job:
+            response = client.post(
+                f"/galaxies?background=true", json={"name": "will be ignored"}
+            )
+
+            assert response.status_code == 201
+            patched_fake_job.assert_called_once_with(arg=10)
+
     def test_perform_update(self, session: Session):
         galaxy = Galaxy(name="Milky Way")
         session.add(galaxy)
@@ -239,6 +261,20 @@ class TestPerformHooks:
         assert response.json() == {
             "data": {"id": galaxy.id, "name": "ProvidedByPerformUpdate"}
         }
+
+    def test_perform_update_with_background(self, session: Session):
+        galaxy = Galaxy(name="Milky Way")
+        session.add(galaxy)
+        session.commit()
+
+        with mock.patch.object(FakeJobs, "do_something") as patched_fake_job:
+            response = client.patch(
+                f"/galaxies/{galaxy.id}?background=true",
+                json={"name": "will be ignored"},
+            )
+
+            assert response.status_code == 200
+            patched_fake_job.assert_called_once_with(arg=10)
 
     def test_perform_delete(self, session: Session):
         galaxy = Galaxy(name="Milky Way")
