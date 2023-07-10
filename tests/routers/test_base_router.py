@@ -6,13 +6,13 @@ import pytest
 from dirty_equals import IsInt
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-from pydantic.generics import GenericModel
-from sqlmodel import Session
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from fastapi_resources import routers
 from fastapi_resources.routers import decorators
 from tests.conftest import OneTimeData
-from tests.resources.sqlmodel_models import (
+from tests.resources.sqlalchemy_models import (
     Galaxy,
     GalaxyCreate,
     GalaxyResource,
@@ -31,7 +31,7 @@ star_router = routers.ResourceRouter(prefix="/stars", resource_class=StarResourc
 T = TypeVar("T")
 
 
-class Envelope(GenericModel, Generic[T]):
+class Envelope(BaseModel, Generic[T]):
     data: T
 
 

@@ -1,7 +1,6 @@
 from typing import Generic, List, Optional, TypeVar, Union
 
 from pydantic import BaseModel
-from pydantic.generics import GenericModel
 
 
 class Object(BaseModel):
@@ -27,8 +26,6 @@ class JALinks(BaseModel):
     """A links-object"""
 
     self: Optional[str] = ""
-    # Will be used when relationship endpoints are implemented
-    related: Optional[str] = ""
 
 
 class JALinksWithPagination(JALinks):
@@ -38,22 +35,22 @@ class JALinksWithPagination(JALinks):
 TLinks = TypeVar("TLinks", bound=Union[JALinks, JALinksWithPagination])
 
 
-class JAResourceIdentifierObject(GenericModel, Generic[TType]):
+class JAResourceIdentifierObject(BaseModel, Generic[TType]):
     type: TType
     id: str
 
 
-class JARelationshipsObjectSingle(GenericModel, Generic[TType]):
-    links: Optional[JALinks]
+class JARelationshipsObjectSingle(BaseModel, Generic[TType]):
+    links: Optional[JALinks] = None
     data: Optional[JAResourceIdentifierObject[TType]] = None
 
 
-class JARelationshipsObjectMany(GenericModel, Generic[TType]):
-    links: Optional[JALinks]
+class JARelationshipsObjectMany(BaseModel, Generic[TType]):
+    links: Optional[JALinks] = None
     data: list[JAResourceIdentifierObject[TType]]
 
 
-class JAResourceObject(GenericModel, Generic[TAttributes, TRelationships, TName]):
+class JAResourceObject(BaseModel, Generic[TAttributes, TRelationships, TName]):
     id: str
     type: TName
     attributes: TAttributes
@@ -61,29 +58,29 @@ class JAResourceObject(GenericModel, Generic[TAttributes, TRelationships, TName]
     relationships: TRelationships
 
 
-class JAUpdateObject(GenericModel, Generic[TAttributes, TRelationships, TName]):
+class JAUpdateObject(BaseModel, Generic[TAttributes, TRelationships, TName]):
     id: str
     type: TName
-    attributes: Optional[TAttributes]
-    relationships: Optional[TRelationships]
+    attributes: Optional[TAttributes] = None
+    relationships: Optional[TRelationships] = None
 
 
-class JAUpdateRequest(GenericModel, Generic[TAttributes, TRelationships, TName]):
+class JAUpdateRequest(BaseModel, Generic[TAttributes, TRelationships, TName]):
     data: JAUpdateObject[TAttributes, TRelationships, TName]
 
 
-class JACreateObject(GenericModel, Generic[TAttributes, TRelationships, TName]):
+class JACreateObject(BaseModel, Generic[TAttributes, TRelationships, TName]):
     type: TName
-    attributes: Optional[TAttributes]
-    relationships: Optional[TRelationships]
+    attributes: Optional[TAttributes] = None
+    relationships: Optional[TRelationships] = None
 
 
-class JACreateRequest(GenericModel, Generic[TAttributes, TRelationships, TName]):
+class JACreateRequest(BaseModel, Generic[TAttributes, TRelationships, TName]):
     data: JACreateObject[TAttributes, TRelationships, TName]
 
 
 class JAResponseSingle(
-    GenericModel, Generic[TAttributes, TRelationships, TName, TIncluded]
+    BaseModel, Generic[TAttributes, TRelationships, TName, TIncluded]
 ):
     data: JAResourceObject[TAttributes, TRelationships, TName]
     included: TIncluded
@@ -91,7 +88,7 @@ class JAResponseSingle(
 
 
 class JAResponseList(
-    GenericModel,
+    BaseModel,
     Generic[TAttributes, TRelationships, TName, TIncluded, TMeta, TLinks],
 ):
     data: List[JAResourceObject[TAttributes, TRelationships, TName]]

@@ -1,56 +1,28 @@
-from typing import List, Optional
+from typing import Optional
 
-from fastapi import FastAPI, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import ForeignKey, create_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    MappedAsDataclass,
+    mapped_column,
+    relationship,
+)
 
-from fastapi_resources import resources, routers
+from fastapi_resources.resources import SQLAlchemyResource
 from fastapi_resources.resources.sqlalchemy import paginators
-from fastapi_resources.resources.sqlalchemy.resources import SQLAlchemyResource
-from fastapi_resources.routers import decorators
+from tests.resources.sqlalchemy_base import Base
 
-sqlite_file_name = "database.db"
-sqlite_url = f"sqlite:///{sqlite_file_name}"
+from .planet import Planet, PlanetCreate, PlanetRead
 
-engine = create_engine(sqlite_url, echo=True, connect_args={"check_same_thread": False})
-
-app = FastAPI()
+# from sqlmodel import Field, Relationship, BaseModel, create_engine
 
 
-class Base(DeclarativeBase):
-    pass
-
-
-@app.on_event("startup")
-def on_startup():
-    Base.metadata.create_all(engine)
-
-
-class Planet(Base):
-    __tablename__ = "planet"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str]
-
-    star: Mapped["Star"] = relationship(back_populates="planets")
-    favorite_galaxy: Mapped["Galaxy"] = relationship(back_populates="favorite_planets")
-    star_id: Mapped[Optional[int]] = mapped_column(ForeignKey("star.id"))
-    favorite_galaxy_id: Mapped[Optional[int]] = mapped_column(ForeignKey("galaxy.id"))
-
-
-class PlanetCreate(BaseModel):
-    name: str
-    star_id: Optional[int] = None
-    favorite_galaxy_id: Optional[int] = None
-
-
-class PlanetRead(BaseModel):
-    id: str
-
-    name: str
-    star: Optional[BaseModel] = None
-    favorite_galaxy: Optional[BaseModel] = None
+sqlite_url = "sqlite+pysqlite://"
+engine = create_engine(
+    sqlite_url, connect_args={"check_same_thread": False}, future=True
+)
 
 
 class Star(Base):
@@ -70,8 +42,7 @@ class Star(Base):
 class StarCreate(BaseModel):
     name: str
 
-    planets: Optional[BaseModel] = None
-    galaxy: Optional[BaseModel] = None
+    __relationships__ = ["planets", "galaxy"]
 
 
 class StarRead(BaseModel):
@@ -80,15 +51,13 @@ class StarRead(BaseModel):
     color: str
     brightness: int = 1
 
-    planets: Optional[BaseModel] = None
-    galaxy: Optional[BaseModel] = None
+    __relationships__ = ["planets", "galaxy"]
 
 
 class StarUpdate(BaseModel):
     name: Optional[str]
 
-    planets: Optional[BaseModel] = None
-    galaxy: Optional[BaseModel] = None
+    __relationships__ = ["planets", "galaxy"]
 
 
 class Cluster(Base):
@@ -117,16 +86,20 @@ class Galaxy(Base):
 class GalaxyCreate(BaseModel):
     name: str
 
-    stars: BaseModel
-    favorite_planets: BaseModel
+    __relationships__ = ["stars", "favorite_planets"]
 
 
 class GalaxyRead(BaseModel):
     id: int
     name: str
 
-    stars: BaseModel
-    favorite_planets: BaseModel
+    __relationships__ = ["stars", "favorite_planets"]
+
+
+GalaxyCreate.model_rebuild()
+StarRead.model_rebuild()
+StarCreate.model_rebuild()
+PlanetRead.model_rebuild()
 
 
 class GalaxyUpdate(BaseModel):
@@ -146,7 +119,7 @@ class MoonRead(BaseModel):
     id: int
     name: str
 
-    planet: BaseModel
+    __relationships__ = ["planet"]
 
 
 class Asteroid(Base):
@@ -215,27 +188,3 @@ class AsteroidResource(SQLAlchemyResource[Asteroid]):
     Db = Asteroid
     Read = AsteroidRead
     id_field = "name"
-
-
-class GalaxyResourceRouter(routers.JSONAPIResourceRouter):
-    resource_class = GalaxyResource
-
-    @decorators.action(detail=False)
-    def distant_galaxies(self, request: Request):
-        resource = self.get_resource(request=request)
-        return resource.list()
-
-    @decorators.action(detail=True, methods=["patch"])
-    def rename(self, id: int, request: Request):
-        resource = self.get_resource(request=request)
-        obj = resource.update(id=id, model=GalaxyUpdate(name="Andromeda"))
-        return obj
-
-
-galaxy = GalaxyResourceRouter(resource_class=GalaxyResource, tags=["Galaxies"])
-star = routers.JSONAPIResourceRouter(resource_class=StarResource, tags=["Stars"])
-planet = routers.JSONAPIResourceRouter(resource_class=PlanetResource, tags=["Planets"])
-
-app.include_router(galaxy)
-app.include_router(star)
-app.include_router(planet)

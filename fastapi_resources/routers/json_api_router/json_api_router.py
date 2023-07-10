@@ -4,7 +4,7 @@ from fastapi import BackgroundTasks, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import create_model
-from pydantic.main import BaseModel, ModelMetaclass
+from pydantic.main import BaseModel
 
 from fastapi_resources.resources.types import (
     Inclusions,
@@ -16,16 +16,16 @@ from fastapi_resources.routers import base_router
 
 from . import types
 
-include_query = Query(None, regex=r"^([\w\.]+)(,[\w\.]+)*$")
+include_query = Query(None, pattern=r"^([\w\.]+)(,[\w\.]+)*$")
 
 
 TResource = TypeVar("TResource", bound=ResourceProtocol)
 
 
 def get_schemas_from_relationships(
-    relationships: Relationships, visited: Optional[set[type[types.Object]]] = None
-) -> list[tuple[str, ModelMetaclass]]:
-    schemas: list[tuple[str, ModelMetaclass]] = []
+    relationships: Relationships, visited: Optional[set[Type[BaseModel]]] = None
+) -> list[tuple[str, type[BaseModel]]]:
+    schemas: list[tuple[str, Type[BaseModel]]] = []
 
     visited = visited or set()
     for relationship_info in relationships.values():
@@ -46,8 +46,7 @@ def get_schemas_from_relationships(
 def get_relationships_model_for_model(
     method: str, resource_class: type[TResource], model: type[BaseModel]
 ):
-    allowed_fields = set(model.__fields__.keys())
-    allowed_fields.update(model.__sqlmodel_relationships__.keys())
+    allowed_fields = set(getattr(model, "__relationships__", set()))
 
     RelationshipLinkages = {
         relationship_name: (
@@ -88,11 +87,14 @@ def get_relationships_model_for_model(
 def get_attributes_model_for_model(
     method: str, model: type[BaseModel], resource_class: type[TResource]
 ):
-    Attributes = create_model(f"{model.__name__}__{method}__Attributes", __base__=model)
-
-    # Remove the ID
-    if "id" in Attributes.__fields__:
-        del Attributes.__fields__["id"]
+    base_model_fields = {
+        name: (field.annotation, field)
+        for name, field in model.model_fields.items()
+        if name != "id"
+    }
+    Attributes = create_model(
+        f"{model.__name__}__{method}__Attributes", **base_model_fields
+    )
 
     return Attributes
 
@@ -376,8 +378,11 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         return relationships
 
     def build_resource_object(self, obj: types.Object, resource: TResource):
+        pydantic_object = resource.Read.model_validate(
+            obj, from_attributes=True, strict=False
+        )
+
         valid_attributes = resource.get_attributes()
-        pydantic_object = resource.Read.from_orm(obj)
 
         # ID is a special case, so can ignored
         if "id" in valid_attributes:
@@ -386,16 +391,16 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         # Filter out relationships attributes
         attributes = {
             key: value
-            for key, value in pydantic_object.dict().items()
+            for key, value in pydantic_object.model_dump().items()
             if key in valid_attributes
         }
 
         resource_object = types.JAResourceObject(
-            id=pydantic_object.id,
+            id=str(pydantic_object.id),
             type=resource.name,
             attributes=attributes,
             links=self.build_resource_object_links(
-                id=pydantic_object.id, resource=resource
+                id=str(pydantic_object.id), resource=resource
             ),
             relationships=self.build_resource_object_relationships(
                 obj=obj, resource=resource

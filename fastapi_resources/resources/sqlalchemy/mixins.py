@@ -1,15 +1,15 @@
 from typing import Optional
 
+from sqlalchemy import select, update
 from sqlalchemy.orm import MANYTOONE, ONETOMANY
-from sqlmodel import select, update
 
-from fastapi_resources.resources.sqlmodel import types
-from fastapi_resources.resources.sqlmodel.exceptions import NotFound
+from fastapi_resources.resources.sqlalchemy import types
+from fastapi_resources.resources.sqlalchemy.exceptions import NotFound
 
 
 class CreateResourceMixin:
     def create(
-        self: types.SQLResourceProtocol[types.TDb],
+        self: types.SQLAlchemyResourceProtocol[types.TDb],
         attributes: dict,
         relationships: Optional[dict[str, str | int | list[str | int]]] = None,
         **kwargs,
@@ -39,7 +39,7 @@ class CreateResourceMixin:
             related_resource = RelatedResource(context=self.context)
 
             if related_where := related_resource.get_where():
-                results = self.session.exec(
+                results = self.session.scalars(
                     select(related_db_model).where(
                         related_db_model.id.in_(new_related_ids), *related_where
                     )
@@ -92,7 +92,7 @@ class CreateResourceMixin:
 
 class UpdateResourceMixin:
     def update(
-        self: types.SQLResourceProtocol[types.TDb],
+        self: types.SQLAlchemyResourceProtocol[types.TDb],
         *,
         id: int | str,
         attributes: dict,
@@ -123,7 +123,7 @@ class UpdateResourceMixin:
                 related_resource = RelatedResource(context=self.context)
 
                 if related_where := related_resource.get_where():
-                    results = self.session.exec(
+                    results = self.session.scalars(
                         select(related_db_model).where(
                             related_db_model.id.in_(new_related_ids), *related_where
                         )
@@ -167,7 +167,7 @@ class UpdateResourceMixin:
 
 
 class ListResourceMixin:
-    def list(self: types.SQLResourceProtocol[types.TDb]):
+    def list(self: types.SQLAlchemyResourceProtocol[types.TDb]):
         select = self.get_select()
 
         paginator = getattr(self, "paginator", None)
@@ -175,8 +175,8 @@ class ListResourceMixin:
         if paginator:
             select = paginator.paginate_select(select)
 
-        rows = self.session.exec(select).unique().all()
-        count = self.session.exec(self.get_count_select()).one()
+        rows = self.session.scalars(select).unique().all()
+        count = self.session.scalars(self.get_count_select()).one()
 
         next = None
 
@@ -187,14 +187,14 @@ class ListResourceMixin:
 
 
 class RetrieveResourceMixin:
-    def retrieve(self: types.SQLResourceProtocol[types.TDb], *, id: int | str):
+    def retrieve(self: types.SQLAlchemyResourceProtocol[types.TDb], *, id: int | str):
         row = self.get_object(id=id)
 
         return row
 
 
 class DeleteResourceMixin:
-    def delete(self: types.SQLResourceProtocol[types.TDb], *, id: int | str):
+    def delete(self: types.SQLAlchemyResourceProtocol[types.TDb], *, id: int | str):
         row = self.get_object(id=id)
 
         self.session.delete(row)

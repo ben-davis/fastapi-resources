@@ -15,7 +15,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
-from fastapi_resources.resources.sqlmodel.exceptions import NotFound
+from fastapi_resources.resources.sqlalchemy.exceptions import NotFound
 from fastapi_resources.resources.types import ResourceProtocol
 from fastapi_resources.routers import decorators
 
@@ -285,7 +285,8 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             raise NotImplementedError("Resource.retrieve not implemented")
 
         row = resource.retrieve(id=id)
-        return self.build_response(rows=row, resource=resource, request=request)
+        res = self.build_response(rows=row, resource=resource, request=request)
+        return res
 
     async def _list(self, *, request: Request):
         resource = self.get_resource(request=request)
@@ -309,7 +310,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         resource = self.get_resource(request=request)
 
         attributes, relationships = self.parse_update(
-            resource=resource, update=create.dict(exclude_unset=True)
+            resource=resource, update=create.model_dump(exclude_unset=True)
         )
 
         row = self.perform_create(
@@ -342,7 +343,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         resource = self.get_resource(request=request)
 
         attributes, relationships = self.parse_update(
-            resource=resource, update=update.dict(exclude_unset=True)
+            resource=resource, update=update.model_dump(exclude_unset=True)
         )
         row = self.perform_update(
             request=request,

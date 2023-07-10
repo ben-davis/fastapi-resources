@@ -107,7 +107,7 @@ class Resource(Generic[TDb]):
 
     @classmethod
     def get_attributes(cls) -> set[str]:
-        return set(cls.Db.__fields__.keys())
+        return set(cls.Db.model_fields.keys())
 
     def get_related(self, obj: BaseModel, inclusion: list[str]) -> list[SelectedObj]:
         raise NotImplementedError()

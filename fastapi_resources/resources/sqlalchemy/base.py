@@ -1,24 +1,21 @@
 import copy
 from typing import Any, ClassVar, Generic, Optional, Type
 
-from fastapi import HTTPException
-from sqlalchemy.orm import MANYTOONE
-from sqlalchemy.orm import exc as sa_exceptions
-from sqlalchemy.orm import joinedload
-from sqlmodel import Session, SQLModel, func, select, text, update
-from sqlmodel.sql.expression import SelectOfScalar
+from sqlalchemy import exc as sa_exceptions
+from sqlalchemy import func, inspect, select
+from sqlalchemy.orm import MANYTOONE, DeclarativeBase, Session, joinedload
 
 from fastapi_resources.resources import base_resource
-from fastapi_resources.resources.sqlmodel.exceptions import NotFound
+from fastapi_resources.resources.sqlalchemy.exceptions import NotFound
 
 from . import types
 
 
 def get_relationships_from_schema(
-    schema: Type[SQLModel],
+    schema: Type[DeclarativeBase],
     schema_cache: Optional[
         dict[
-            tuple[Optional[str], Type[SQLModel]],
+            tuple[Optional[str], Type[DeclarativeBase]],
             types.SchemaWithRelationships,
         ]
     ] = None,
@@ -27,7 +24,6 @@ def get_relationships_from_schema(
 ):
     schema_cache = schema_cache or {}
 
-    relationship_fields = schema.__sqlmodel_relationships__.keys()
     relationships = {}
 
     parent_schema_with_relationships = types.SchemaWithRelationships(
@@ -41,8 +37,7 @@ def get_relationships_from_schema(
 
     schema_cache[(parent_key, schema)] = parent_schema_with_relationships
 
-    for field in relationship_fields:
-        sqlalchemy_relationship = getattr(schema, field).property
+    for field, sqlalchemy_relationship in inspect(schema).relationships.items():
         related_schema = sqlalchemy_relationship.mapper.class_
         many = sqlalchemy_relationship.uselist
 
@@ -60,7 +55,7 @@ def get_relationships_from_schema(
         # If this branch already contains the schema with the same parent,
         # we can reuse the relationship to avoid a cycle.
         if relationship_info := schema_cache.get((new_parent_key, related_schema)):
-            relationships[field] = types.SQLModelRelationshipInfo(
+            relationships[field] = types.SQLAlchemyRelationshipInfo(
                 schema_with_relationships=relationship_info,
                 many=many,
                 field=field,
@@ -74,7 +69,8 @@ def get_relationships_from_schema(
         if field == immediate_parent_backpopulated_field:
             continue
 
-        backpopulated_field = schema.__sqlmodel_relationships__[field].back_populates
+        # TODO: Can we cache the relationships when added to the registry?
+        backpopulated_field = inspect(schema).relationships[field].back_populates
 
         get_relationships_from_schema(
             schema=related_schema,
@@ -91,7 +87,7 @@ def get_relationships_from_schema(
         schema_with_relationship = schema_cache.get((new_parent_key, related_schema))
         assert schema_with_relationship
 
-        relationships[field] = types.SQLModelRelationshipInfo(
+        relationships[field] = types.SQLAlchemyRelationshipInfo(
             schema_with_relationships=schema_with_relationship,
             many=many,
             field=field,
@@ -102,12 +98,12 @@ def get_relationships_from_schema(
     return relationships
 
 
-class BaseSQLResource(
+class BaseSQLAlchemyResource(
     base_resource.Resource[types.TDb],
-    types.SQLResourceProtocol[types.TDb],
+    types.SQLAlchemyResourceProtocol[types.TDb],
     Generic[types.TDb],
 ):
-    registry: dict[Type[SQLModel], type["BaseSQLResource"]] = {}
+    registry: dict[Type[DeclarativeBase], type["BaseSQLAlchemyResource"]] = {}
 
     Paginator: ClassVar[Optional[Type[types.PaginatorProtocol]]]
     paginator: Optional[types.PaginatorProtocol]
@@ -116,7 +112,7 @@ class BaseSQLResource(
 
     def __init_subclass__(cls) -> None:
         if Db := getattr(cls, "Db", None):
-            BaseSQLResource.registry[Db] = cls
+            BaseSQLAlchemyResource.registry[Db] = cls
 
         return super().__init_subclass__()
 
@@ -156,8 +152,8 @@ class BaseSQLResource(
           - Validate a given inclusion resolves to a relationship (done in the base class)
           - To retrieve all the objects along an inclusion with their schemas
         """
-        read_fields = set(cls.Read.__fields__.keys())
-        read_fields.update(cls.Read.__sqlmodel_relationships__.keys())
+        read_fields = set(getattr(cls.Read, "__relationships__", set()))
+
         relationships = get_relationships_from_schema(schema=cls.Db)
 
         return {
@@ -167,13 +163,14 @@ class BaseSQLResource(
     @classmethod
     def get_attributes(cls) -> set[str]:
         attributes = set()
+        relationships = cls.get_relationships()
 
         # These are the fields according to the pydantic model
-        fields = cls.Read.schema().get("properties", {})
+        fields = cls.Read.model_fields
         for field in fields:
             # If the field refers to a foreign key field we skip it as it'll be
             # included in get_relationships.
-            if getattr(cls.Db, field).expressions[0].foreign_keys:
+            if field in relationships:
                 continue
 
             attributes.add(field)
@@ -246,7 +243,7 @@ class BaseSQLResource(
         id_field = getattr(self.Db, self.id_field or "id")
 
         try:
-            return self.session.exec(select.where(id_field == id)).unique().one()
+            return self.session.scalars(select.where(id_field == id)).unique().one()
         except sa_exceptions.NoResultFound:
             raise NotFound(f"{self.name} not found")
 
@@ -275,7 +272,7 @@ class BaseSQLResource(
 
             selected_objs = [
                 types.SelectedObj(
-                    obj=selected_obj, resource=BaseSQLResource.registry[schema]
+                    obj=selected_obj, resource=BaseSQLAlchemyResource.registry[schema]
                 )
                 for selected_obj in selected_objs
             ]

@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 from typing import ClassVar, Generic, Optional, Protocol, Type, TypeVar
 
+from pydantic import BaseModel
+from sqlalchemy import Select
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import MANYTOMANY, ONETOMANY
-from sqlmodel import Session, SQLModel
-from sqlmodel.sql.expression import SelectOfScalar
+from sqlalchemy.orm import DeclarativeBase, RelationshipDirection, Session
 
 from fastapi_resources.resources import types
 
@@ -15,7 +15,7 @@ class PaginatorProtocol(Protocol):
     def __init__(self, cursor: Optional[str] = None, limit: Optional[int] = None):
         ...
 
-    def paginate_select(self, select: SelectOfScalar) -> SelectOfScalar:
+    def paginate_select(self, select: Select) -> Select:
         ...
 
     def get_next(self, count: int) -> Optional[str]:
@@ -24,43 +24,45 @@ class PaginatorProtocol(Protocol):
 
 @dataclass()
 class SchemaWithRelationships:
-    schema: Type[SQLModel]
+    schema: Type[DeclarativeBase]
     relationships: "Relationships"
 
 
 @dataclass
-class SQLModelRelationshipInfo:
+class SQLAlchemyRelationshipInfo:
     schema_with_relationships: SchemaWithRelationships
     many: bool
     field: str
-    direction: ONETOMANY | MANYTOMANY
+    direction: RelationshipDirection
     update_field: str
 
 
-Relationships = dict[str, SQLModelRelationshipInfo]
+Relationships = dict[str, SQLAlchemyRelationshipInfo]
 
 
-TDb = TypeVar("TDb", bound=SQLModel)
+TDb = TypeVar("TDb", bound=DeclarativeBase)
 
 
-class SQLResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
+class SQLAlchemyResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
     Db: ClassVar[Type[TDb]]
-    Read: ClassVar[Type[SQLModel]]
-    Create: ClassVar[Optional[Type[SQLModel]]] = None
-    Update: ClassVar[Optional[Type[SQLModel]]] = None
+    Read: ClassVar[Type[BaseModel]]
+    Create: ClassVar[Optional[Type[BaseModel]]] = None
+    Update: ClassVar[Optional[Type[BaseModel]]] = None
 
     engine: ClassVar[Optional[Engine]] = None
 
     session: Session
 
-    registry: dict[Type[SQLModel], type["SQLResourceProtocol"]] = {}
+    registry: ClassVar[
+        dict[Type[DeclarativeBase], type["SQLAlchemyResourceProtocol"]]
+    ] = {}
 
     Paginator: Optional[PaginatorProtocol]
 
     @classmethod
     def get_relationships(
         cls,
-    ) -> dict[str, SQLModelRelationshipInfo]:
+    ) -> dict[str, SQLAlchemyRelationshipInfo]:
         """Get the relationships for the resource."""
         ...
 
@@ -73,23 +75,23 @@ class SQLResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
         """
         ...
 
-    def get_related(self, obj: SQLModel, inclusion: list[str]) -> list[TDb]:
+    def get_related(self, obj: DeclarativeBase, inclusion: list[str]) -> list[TDb]:
         ...
 
     def get_object(self, id: int | str) -> TDb:
         ...
 
-    def get_select(self) -> SelectOfScalar[TDb]:
+    def get_select(self) -> Select[TDb]:
         ...
 
     def get_where(self) -> list[str]:
         ...
 
-    def get_count_select(self) -> SelectOfScalar[TDb]:
+    def get_count_select(self) -> Select[TDb]:
         ...
 
 
 @dataclass
 class SelectedObj:
-    obj: SQLModel
-    resource: "SQLResourceProtocol"
+    obj: DeclarativeBase
+    resource: "SQLAlchemyResourceProtocol"

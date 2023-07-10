@@ -1,32 +1,34 @@
 import uuid
 from typing import TYPE_CHECKING, Optional
 
-from sqlmodel import Field, Relationship, SQLModel
+from pydantic import BaseModel
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from tests.resources.sqlalchemy_base import Base
 
 if TYPE_CHECKING:
-    from .sqlmodel_models import Galaxy, Star
+    from .sqlalchemy_models import Galaxy, Star
 
 
-class PlanetBase(SQLModel):
+class Planet(Base):
+    __tablename__ = "planet"
+
+    id: Mapped[str] = mapped_column(default=lambda: str(uuid.uuid4()), primary_key=True)
+    name: Mapped[str]
+
+    star: Mapped["Star"] = relationship(back_populates="planets")
+    favorite_galaxy: Mapped["Galaxy"] = relationship(back_populates="favorite_planets")
+    star_id: Mapped[Optional[int]] = mapped_column(ForeignKey("star.id"))
+    favorite_galaxy_id: Mapped[Optional[int]] = mapped_column(ForeignKey("galaxy.id"))
+
+
+class PlanetCreate(BaseModel):
     name: str
 
-    star_id: Optional[int] = Field(default=None, foreign_key="star.id")
-    favorite_galaxy_id: Optional[int] = Field(default=None, foreign_key="galaxy.id")
 
-
-class Planet(PlanetBase, table=True):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
-
-    star: "Star" = Relationship(back_populates="planets")
-    favorite_galaxy: "Galaxy" = Relationship(back_populates="favorite_planets")
-
-
-class PlanetCreate(PlanetBase):
-    pass
-
-
-class PlanetRead(PlanetBase):
+class PlanetRead(BaseModel):
     id: str
+    name: str
 
-    star: "Star" = Relationship(back_populates="planets")
-    favorite_galaxy: "Galaxy" = Relationship(back_populates="favorite_planets")
+    __relationships__ = ["star", "favorite_galaxy"]

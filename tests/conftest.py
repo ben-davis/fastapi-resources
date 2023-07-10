@@ -1,9 +1,9 @@
 from typing import NamedTuple
 
 import pytest
-from sqlalchemy.orm import close_all_sessions
-from sqlmodel import Session, SQLModel
-from tests.resources.sqlmodel_models import Planet, Star, engine
+from sqlalchemy.orm import Session, close_all_sessions
+
+from tests.resources.sqlalchemy_models import Base, Planet, Star, engine
 
 
 class OneTimeData(NamedTuple):
@@ -13,7 +13,7 @@ class OneTimeData(NamedTuple):
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_database():
-    SQLModel.metadata.create_all(engine)
+    Base.metadata.create_all(engine)
 
     one_time_data: OneTimeData
 
@@ -34,4 +34,4 @@ def setup_database():
 
     close_all_sessions()
 
-    SQLModel.metadata.drop_all(engine)
+    Base.metadata.drop_all(engine)

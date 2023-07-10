@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlmodel.sql.expression import SelectOfScalar
+from sqlalchemy import Select
 
 
 class LimitOffsetPaginator:
@@ -8,7 +8,7 @@ class LimitOffsetPaginator:
         self.page = int(cursor) if cursor else 1
         self.limit = limit or 20
 
-    def paginate_select(self, select: SelectOfScalar):
+    def paginate_select(self, select: Select):
         return select.limit(self.limit).offset((self.page - 1) * self.limit)
 
     def get_next(self, count: int):

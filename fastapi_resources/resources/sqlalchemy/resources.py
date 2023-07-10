@@ -5,12 +5,12 @@ from . import base, mixins, types
 __all__ = [
     "ListCreateResource",
     "ListCreateUpdateResource",
-    "SQLModelResource",
+    "SQLAlchemyResource",
 ]
 
 
 class ListCreateResource(
-    mixins.CreateResourceMixin, mixins.ListResourceMixin, base.BaseSQLResource
+    mixins.CreateResourceMixin, mixins.ListResourceMixin, base.BaseSQLAlchemyResource
 ):
     pass
 
@@ -19,19 +19,19 @@ class ListCreateUpdateResource(
     mixins.ListResourceMixin,
     mixins.CreateResourceMixin,
     mixins.UpdateResourceMixin,
-    base.BaseSQLResource,
+    base.BaseSQLAlchemyResource,
 ):
     pass
 
 
-class SQLModelResource(
+class SQLAlchemyResource(
     mixins.RetrieveResourceMixin,
     mixins.ListResourceMixin,
     mixins.CreateResourceMixin,
     mixins.UpdateResourceMixin,
     mixins.DeleteResourceMixin,
-    base.BaseSQLResource[types.TDb],
-    types.SQLResourceProtocol[types.TDb],
+    base.BaseSQLAlchemyResource[types.TDb],
+    types.SQLAlchemyResourceProtocol[types.TDb],
     Generic[types.TDb],
 ):
     pass
