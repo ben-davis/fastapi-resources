@@ -81,7 +81,7 @@ class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
         )
 
         if request.query_params.get("background"):
-            return update, functools.partial(FakeJobs.do_something, arg=10)
+            resource.tasks.append(functools.partial(FakeJobs.do_something, arg=10))
 
         return update
 
@@ -97,7 +97,7 @@ class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
         galaxy = resource.create(attributes=attributes, relationships=relationships)
 
         if request.query_params.get("background"):
-            return galaxy, functools.partial(FakeJobs.do_something, arg=10)
+            resource.tasks.append(functools.partial(FakeJobs.do_something, arg=10))
 
         return galaxy
 

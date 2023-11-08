@@ -44,6 +44,7 @@ class Resource(Generic[TDb]):
 
         self.inclusions = inclusions or []
         self.context = context or {}
+        self.tasks = []
 
     def close(self):
         pass

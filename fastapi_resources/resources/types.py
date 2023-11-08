@@ -60,6 +60,7 @@ class ResourceProtocol(Protocol, Generic[TDb, TBaseModel]):
 
     inclusions: Inclusions
     context: dict = {}
+    tasks: List = []
 
     def __init__(*args, **kwargs):
         pass

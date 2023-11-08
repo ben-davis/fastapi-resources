@@ -300,6 +300,14 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             rows=rows, resource=resource, request=request, count=count, next=next
         )
 
+    def _process_tasks(self, background_tasks: BackgroundTasks, resource: TResource):
+        for task in resource.tasks:
+            background_tasks.add_task(
+                task.func,
+                *task.args,
+                **task.keywords,
+            )
+
     async def _create(
         self,
         *,
@@ -320,15 +328,10 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             relationships=relationships,
         )
 
-        if isinstance(row, tuple):
-            row, *partials = row
-
-            for partial in partials:
-                background_tasks.add_task(
-                    partial.func,
-                    *partial.args,
-                    **partial.keywords,
-                )
+        self._process_tasks(
+            background_tasks=background_tasks,
+            resource=resource,
+        )
 
         return self.build_response(rows=row, resource=resource, request=request)
 
@@ -353,15 +356,10 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             id=id,
         )
 
-        if isinstance(row, tuple):
-            row, *partials = row
-
-            for partial in partials:
-                background_tasks.add_task(
-                    partial.func,
-                    *partial.args,
-                    **partial.keywords,
-                )
+        self._process_tasks(
+            background_tasks=background_tasks,
+            resource=resource,
+        )
 
         return self.build_response(rows=row, resource=resource, request=request)
 
@@ -374,14 +372,11 @@ class ResourceRouter(APIRouter, Generic[TResource]):
     ):
         resource = self.get_resource(request=request)
 
-        partials = self.perform_delete(request=request, resource=resource, id=id)
+        self.perform_delete(request=request, resource=resource, id=id)
 
-        if isinstance(partials, tuple):
-            for partial in partials:
-                background_tasks.add_task(
-                    partial.func,
-                    *partial.args,
-                    **partial.keywords,
-                )
+        self._process_tasks(
+            background_tasks=background_tasks,
+            resource=resource,
+        )
 
         return Response(status_code=204)
