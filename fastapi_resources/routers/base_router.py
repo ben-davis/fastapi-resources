@@ -321,17 +321,18 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             resource=resource, update=create.model_dump(exclude_unset=True)
         )
 
-        row = self.perform_create(
-            request=request,
-            resource=resource,
-            attributes=attributes,
-            relationships=relationships,
-        )
-
-        self._process_tasks(
-            background_tasks=background_tasks,
-            resource=resource,
-        )
+        try:
+            row = self.perform_create(
+                request=request,
+                resource=resource,
+                attributes=attributes,
+                relationships=relationships,
+            )
+        finally:
+            self._process_tasks(
+                background_tasks=background_tasks,
+                resource=resource,
+            )
 
         return self.build_response(rows=row, resource=resource, request=request)
 
@@ -348,18 +349,20 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         attributes, relationships = self.parse_update(
             resource=resource, update=update.model_dump(exclude_unset=True)
         )
-        row = self.perform_update(
-            request=request,
-            resource=resource,
-            attributes=attributes,
-            relationships=relationships,
-            id=id,
-        )
 
-        self._process_tasks(
-            background_tasks=background_tasks,
-            resource=resource,
-        )
+        try:
+            row = self.perform_update(
+                request=request,
+                resource=resource,
+                attributes=attributes,
+                relationships=relationships,
+                id=id,
+            )
+        finally:
+            self._process_tasks(
+                background_tasks=background_tasks,
+                resource=resource,
+            )
 
         return self.build_response(rows=row, resource=resource, request=request)
 
@@ -372,11 +375,12 @@ class ResourceRouter(APIRouter, Generic[TResource]):
     ):
         resource = self.get_resource(request=request)
 
-        self.perform_delete(request=request, resource=resource, id=id)
-
-        self._process_tasks(
-            background_tasks=background_tasks,
-            resource=resource,
-        )
+        try:
+            self.perform_delete(request=request, resource=resource, id=id)
+        finally:
+            self._process_tasks(
+                background_tasks=background_tasks,
+                resource=resource,
+            )
 
         return Response(status_code=204)
