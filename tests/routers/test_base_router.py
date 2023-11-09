@@ -66,7 +66,7 @@ class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
         obj = resource.update(id=id, attributes={"name": "Andromeda"})
         return obj
 
-    def perform_update(
+    async def perform_update(
         self,
         request: Request,
         resource: GalaxyResource,
@@ -85,7 +85,7 @@ class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
 
         return update
 
-    def perform_create(
+    async def perform_create(
         self,
         request: Request,
         resource: GalaxyResource,
@@ -101,7 +101,7 @@ class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
 
         return galaxy
 
-    def perform_delete(self, request: Request, resource: GalaxyResource, id: int):
+    async def perform_delete(self, request: Request, resource: GalaxyResource, id: int):
         FakeJobs.do_something()
         return resource.delete(id=id)
 

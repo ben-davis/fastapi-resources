@@ -246,7 +246,13 @@ class ResourceRouter(APIRouter, Generic[TResource]):
 
         return update, relationships
 
-    def perform_create(
+    async def _await_if_necessary(self, result):
+        if inspect.isawaitable(result):
+            return await result
+
+        return result
+
+    async def perform_create(
         self,
         request: Request,
         resource: TResource,
@@ -256,9 +262,11 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         if not resource.create:
             raise NotImplementedError("Resource.create not implemented")
 
-        return resource.create(attributes=attributes, relationships=relationships)
+        return await self._await_if_necessary(
+            resource.create(attributes=attributes, relationships=relationships)
+        )
 
-    def perform_update(
+    async def perform_update(
         self,
         request: Request,
         resource: TResource,
@@ -269,15 +277,17 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         if not resource.update:
             raise NotImplementedError("Resource.update not implemented")
 
-        return resource.update(
-            id=id, attributes=attributes, relationships=relationships
+        return await self._await_if_necessary(
+            resource.update(id=id, attributes=attributes, relationships=relationships)
         )
 
-    def perform_delete(self, request: Request, resource: TResource, id: str | int):
+    async def perform_delete(
+        self, request: Request, resource: TResource, id: str | int
+    ):
         if not resource.delete:
             raise NotImplementedError("Resource.delete not implemented")
 
-        return resource.delete(id=id)
+        return await self._await_if_necessary(resource.delete(id=id))
 
     async def _retrieve(self, *, id: Union[int, str], request: Request):
         resource = self.get_resource(request=request)
@@ -322,7 +332,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         )
 
         try:
-            row = self.perform_create(
+            row = await self.perform_create(
                 request=request,
                 resource=resource,
                 attributes=attributes,
@@ -351,7 +361,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         )
 
         try:
-            row = self.perform_update(
+            row = await self.perform_update(
                 request=request,
                 resource=resource,
                 attributes=attributes,
@@ -376,7 +386,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         resource = self.get_resource(request=request)
 
         try:
-            self.perform_delete(request=request, resource=resource, id=id)
+            await self.perform_delete(request=request, resource=resource, id=id)
         finally:
             self._process_tasks(
                 background_tasks=background_tasks,
