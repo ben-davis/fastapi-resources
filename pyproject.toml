@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "fastapi-resources"
-version = "0.4.2"
+version = "0.4.3"
 description = ""
 authors = ["Ben Davis <ben@bencdavis.com>"]
 packages = [
