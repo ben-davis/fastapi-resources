@@ -65,7 +65,8 @@ def session():
 
 class TestRetrieve:
     def test_retrieve(self, session: Session, setup_database: OneTimeData):
-        sun_id, earth_id = setup_database
+        sun_id = setup_database.sun_id
+        earth_id = setup_database.earth_id
 
         response = client.request("get", f"/stars/{sun_id}")
 
@@ -135,7 +136,8 @@ class TestRetrieve:
             assert response.status_code == 200
 
     def test_include(self, session: Session, setup_database: OneTimeData):
-        sun_id, earth_id = setup_database
+        sun_id = setup_database.sun_id
+        earth_id = setup_database.earth_id
 
         response = client.get(f"/planets/{earth_id}?include=star")
 
@@ -198,7 +200,8 @@ class TestList:
     def test_list(self, session: Session, setup_database: OneTimeData):
         response = client.get(f"/stars")
 
-        sun_id, earth_id = setup_database
+        sun_id = setup_database.sun_id
+        earth_id = setup_database.earth_id
 
         assert response.status_code == 200
         assert response.json() == {
@@ -243,7 +246,8 @@ class TestList:
 
         response = client.get(f"/stars?page[limit]=1")
 
-        sun_id, earth_id = setup_database
+        sun_id = setup_database.sun_id
+        earth_id = setup_database.earth_id
 
         assert response.status_code == 200
         assert response.json() == {
@@ -362,7 +366,8 @@ class TestList:
         }
 
     def test_include(self, session: Session, setup_database: OneTimeData):
-        sun_id, earth_id = setup_database
+        sun_id = setup_database.sun_id
+        earth_id = setup_database.earth_id
 
         # Add a planet with a new star and a galaxy, so we can test it still works even if
         # not all objects have the inclusion (so the OneTimeData star doesn't have a galaxy).
@@ -371,7 +376,7 @@ class TestList:
         mustafar = Planet(name="Mustafar", star=priate)
 
         # Add another planet with the OneTimeData star, so we can test inclusion are de-duped.
-        mars = Planet(name="Mars", star_id=sun_id)
+        mars = Planet(name="Mars", star=setup_database.sun)
 
         session.add(star_wars_galaxy)
         session.add(priate)
@@ -525,11 +530,12 @@ class TestList:
 
 class TestUpdate:
     def test_update(self, session: Session, setup_database: OneTimeData):
-        sun_id, _ = setup_database
+        sun_id = setup_database.sun_id
+        sun = setup_database.sun
 
         galaxy = Galaxy(name="Milky Way")
-        mercury = Planet(name="Mercury")
-        jupiter = Planet(name="Jupiter")
+        mercury = Planet(name="Mercury", star=sun)
+        jupiter = Planet(name="Jupiter", star=sun)
 
         session.add(galaxy)
         session.add(mercury)
@@ -552,7 +558,6 @@ class TestUpdate:
                         "galaxy": {"data": {"type": "galaxy", "id": str(galaxy.id)}},
                         "planets": {
                             "data": [
-                                {"type": "planet", "id": str(mercury.id)},
                                 {"type": "planet", "id": str(jupiter.id)},
                             ]
                         },
@@ -577,7 +582,6 @@ class TestUpdate:
                     },
                     "planets": {
                         "data": [
-                            {"id": str(mercury.id), "type": "planet"},
                             {"id": str(jupiter.id), "type": "planet"},
                         ],
                         "links": {

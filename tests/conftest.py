@@ -7,6 +7,8 @@ from tests.resources.sqlalchemy_models import Base, Planet, Star, engine
 
 
 class OneTimeData(NamedTuple):
+    sun: Star
+    earth: Planet
     sun_id: int
     earth_id: str
 
@@ -28,7 +30,9 @@ def setup_database():
         assert star.id
         assert planet.id
 
-        one_time_data = OneTimeData(sun_id=star.id, earth_id=str(planet.id))
+        one_time_data = OneTimeData(
+            sun=star, earth=planet, sun_id=star.id, earth_id=planet.id
+        )
 
     yield one_time_data
 

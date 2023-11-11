@@ -14,8 +14,7 @@ class CreateResourceMixin:
         relationships: Optional[dict[str, str | int | list[str | int]]] = None,
         **kwargs,
     ):
-        row = self.Db(**(attributes | kwargs))
-
+        create_kwargs = attributes | kwargs
         relationships = relationships or {}
         model_relationships = self.get_relationships()
         did_set_relationship = False
@@ -32,24 +31,29 @@ class CreateResourceMixin:
                 related_ids if isinstance(related_ids, list) else [related_ids]
             )
 
-            # Do a select to check we have permission
             related_resource = RelatedResource(context=self.context)
 
-            if related_where := related_resource.get_where():
-                results = self.session.scalars(
-                    select(related_db_model).where(
-                        related_db_model.id.in_(new_related_ids), *related_where
-                    )
-                ).all()
+            where = [related_db_model.id.in_(new_related_ids)]
 
-                if len(results) != len(new_related_ids):
-                    raise NotFound()
+            # Use the resource's where clause so that if it adds permissions, those
+            # are automatically used when setting the relationship.
+            if related_where := related_resource.get_where():
+                where += related_where
+
+            # Do a select to check we have permission, and so we can set the
+            # relationship using the full object (required to support dataclasses).
+            results = self.session.scalars(select(related_db_model).where(*where)).all()
+
+            if len(results) != len(new_related_ids):
+                raise NotFound()
 
             if direction == MANYTOONE:
-                # Can update locally via a setattr
-                setattr(row, relationship.update_field, new_related_ids[0])
+                # Can update locally via a setattr, using the field name and the resolved
+                # object.
+                create_kwargs[field] = results[0]
                 did_set_relationship = True
 
+        row = self.Db(**create_kwargs)
         self.session.add(row)
         self.session.commit()
 

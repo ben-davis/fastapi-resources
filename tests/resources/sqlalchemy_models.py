@@ -28,15 +28,20 @@ engine = create_engine(
 class Star(Base):
     __tablename__ = "star"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, init=False)
 
     name: Mapped[str]
     color: Mapped[str] = mapped_column(default="")
     brightness: Mapped[int] = mapped_column(default=1)
 
-    planets: Mapped[list[Planet]] = relationship(back_populates="star")
-    galaxy: Mapped["Galaxy"] = relationship(back_populates="stars")
-    galaxy_id: Mapped[Optional[int]] = mapped_column(ForeignKey("galaxy.id"))
+    planets: Mapped[list[Planet]] = relationship(
+        back_populates="star", default_factory=list
+    )
+    galaxy: Mapped["Galaxy"] = relationship(back_populates="stars", default=None)
+    galaxy_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("galaxy.id"),
+        default=None,
+    )
 
 
 class StarCreate(BaseModel):
@@ -63,7 +68,7 @@ class StarUpdate(BaseModel):
 class Cluster(Base):
     __tablename__ = "cluster"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, init=False)
 
     name: Mapped[str]
 
@@ -71,16 +76,20 @@ class Cluster(Base):
 class Galaxy(Base):
     __tablename__ = "galaxy"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, init=False)
     name: Mapped[str]
 
-    stars: Mapped[list[Star]] = relationship(back_populates="galaxy")
+    stars: Mapped[list[Star]] = relationship(
+        back_populates="galaxy", default_factory=list
+    )
     favorite_planets: Mapped[list[Planet]] = relationship(
-        back_populates="favorite_galaxy"
+        back_populates="favorite_galaxy", default_factory=list
     )
 
-    cluster_id: Mapped[Optional[int]] = mapped_column(ForeignKey("cluster.id"))
-    cluster: Mapped[Optional[Cluster]] = relationship()
+    cluster_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("cluster.id"), init=False
+    )
+    cluster: Mapped[Optional[Cluster]] = relationship(default=None)
 
 
 class GalaxyCreate(BaseModel):
@@ -109,9 +118,11 @@ class GalaxyUpdate(BaseModel):
 class Moon(Base):
     __tablename__ = "moon"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, init=False)
     name: Mapped[str]
-    planet_id: Mapped[Optional[int]] = mapped_column(ForeignKey("planet.id"))
+    planet_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("planet.id"), init=False
+    )
     planet: Mapped[Planet] = relationship()
 
 
@@ -125,7 +136,7 @@ class MoonRead(BaseModel):
 class Asteroid(Base):
     __tablename__ = "asteroid"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, init=False)
     name: Mapped[str]
 
 

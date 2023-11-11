@@ -14,13 +14,20 @@ if TYPE_CHECKING:
 class Planet(Base):
     __tablename__ = "planet"
 
-    id: Mapped[str] = mapped_column(default=lambda: str(uuid.uuid4()), primary_key=True)
+    id: Mapped[str] = mapped_column(
+        default_factory=lambda: str(uuid.uuid4()), primary_key=True
+    )
     name: Mapped[str]
 
+    star_id: Mapped[Optional[int]] = mapped_column(ForeignKey("star.id"), init=False)
     star: Mapped["Star"] = relationship(back_populates="planets")
-    favorite_galaxy: Mapped["Galaxy"] = relationship(back_populates="favorite_planets")
-    star_id: Mapped[Optional[int]] = mapped_column(ForeignKey("star.id"))
-    favorite_galaxy_id: Mapped[Optional[int]] = mapped_column(ForeignKey("galaxy.id"))
+
+    favorite_galaxy_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("galaxy.id"), init=False
+    )
+    favorite_galaxy: Mapped[Optional["Galaxy"]] = relationship(
+        back_populates="favorite_planets", default=None
+    )
 
 
 class PlanetCreate(BaseModel):

@@ -135,7 +135,7 @@ class TestRelationships:
         session.add(galaxy)
         session.commit()
 
-        star = Star(name="Sun", galaxy_id=galaxy.id)
+        star = Star(name="Sun", galaxy=galaxy)
         session.add(star)
         session.commit()
 
@@ -143,11 +143,11 @@ class TestRelationships:
         session.add(andromeda)
         session.commit()
 
-        andromedae = Star(name="Andromedae", galaxy_id=galaxy.id)
+        andromedae = Star(name="Andromedae", galaxy=galaxy)
         session.add(andromedae)
         session.commit()
 
-        planet = Planet(name="Earth", star_id=star.id, favorite_galaxy_id=andromeda.id)
+        planet = Planet(name="Earth", star=star, favorite_galaxy=andromeda)
         session.add(planet)
         session.commit()
 
@@ -292,12 +292,12 @@ class TestRetrieve:
         session.commit()
         session.refresh(galaxy)
 
-        star = Star(name="Sun", galaxy_id=galaxy.id)
+        star = Star(name="Sun", galaxy=galaxy)
         session.add(star)
         session.commit()
         session.refresh(star)
 
-        planet = Planet(name="Earth", star_id=star.id)
+        planet = Planet(name="Earth", star=star)
         session.add(planet)
         session.commit()
         session.refresh(planet)
@@ -424,10 +424,11 @@ class TestUpdate:
 
     def test_update_relationships(self, session: Session):
         star = Star(name="Sirius")
+        other_star = Star(name="Sun")
         milky_way = Galaxy(name="Milky Way")
-        earth = Planet(name="Earth")
-        mars = Planet(name="Mars")
-        mercury = Planet(name="Mercury")
+        earth = Planet(name="Earth", star=other_star)
+        mars = Planet(name="Mars", star=other_star)
+        mercury = Planet(name="Mercury", star=other_star)
 
         # No default galaxy, but give it a planet
         star.planets.append(mercury)
