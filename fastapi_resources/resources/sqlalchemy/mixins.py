@@ -14,10 +14,7 @@ class CreateResourceMixin:
         relationships: Optional[dict[str, str | int | list[str | int]]] = None,
         **kwargs,
     ):
-        row = self.Db(**attributes)
-
-        for key, value in kwargs.items():
-            setattr(row, key, value)
+        row = self.Db(**(attributes | kwargs))
 
         relationships = relationships or {}
         model_relationships = self.get_relationships()
