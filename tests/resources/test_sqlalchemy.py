@@ -193,7 +193,7 @@ class TestWhere:
     def test_used_in_get_object(self, session: Session):
         original_resource = SQLAlchemyResource.registry[Star]
 
-        class FilteredStarResource(SQLAlchemyResource[Star]):
+        class FilteredStarResource(StarResource):
             engine = engine
             name = "star"
             Db = Star
@@ -221,7 +221,7 @@ class TestWhere:
         resource = StarResource(session=session, context={"yolo": 123})
 
         # Replace the planet relationship with one that filters
-        class FilteredPlanetResource(SQLAlchemyResource):
+        class FilteredPlanetResource(PlanetResource):
             engine = engine
             name = "planet"
             Db = Planet
@@ -251,7 +251,7 @@ class TestWhere:
         resource = StarResource(session=session, context={"yolo": 123})
 
         # Replace the planet relationship with one that filters
-        class FilteredPlanetResource(SQLAlchemyResource):
+        class FilteredPlanetResource(PlanetResource):
             engine = engine
             name = "planet"
             Db = Planet

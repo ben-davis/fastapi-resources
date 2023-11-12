@@ -110,5 +110,50 @@ class Resource(Generic[TDb]):
     def get_attributes(cls) -> set[str]:
         return set(cls.Db.model_fields.keys())
 
-    def get_related(self, obj: BaseModel, inclusion: list[str]) -> list[SelectedObj]:
-        raise NotImplementedError()
+    def get_related(
+        self,
+        obj: TDb,
+        inclusion: list[str],
+    ) -> list[SelectedObj]:
+        """Gets related objects based on an Inclusions path."""
+
+        def select_objs(
+            _obj, _inclusion: list[str], _relationships: Relationships
+        ) -> list[SelectedObj]:
+            next_inclusion = copy(_inclusion)
+            field = next_inclusion.pop(0)
+            relationship_info = _relationships[field]
+            schema = relationship_info.schema_with_relationships.schema
+
+            selected_objs = getattr(_obj, field)
+            if not selected_objs:
+                return []
+
+            selected_objs = (
+                selected_objs if isinstance(selected_objs, list) else [selected_objs]
+            )
+
+            selected_objs = [
+                SelectedObj(obj=selected_obj, resource=Resource.registry[schema])
+                for selected_obj in selected_objs
+            ]
+
+            if next_inclusion:
+                selected_objs = [
+                    *selected_objs,
+                    *[
+                        nested_obj
+                        for selected_obj in selected_objs
+                        for nested_obj in select_objs(
+                            _obj=selected_obj.obj,
+                            _inclusion=next_inclusion,
+                            _relationships=relationship_info.schema_with_relationships.relationships,
+                        )
+                    ],
+                ]
+
+            return selected_objs
+
+        return select_objs(
+            _obj=obj, _inclusion=inclusion, _relationships=self.get_relationships()
+        )
