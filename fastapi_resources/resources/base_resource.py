@@ -4,7 +4,7 @@ from typing import ClassVar, Generic, Optional, Type
 
 from pydantic.main import BaseModel
 
-from .types import Inclusions, Relationships, SelectedObj, TDb
+from .types import Inclusions, Relationships, ResourceProtocol, SelectedObj, TDb
 
 
 @dataclass
@@ -13,11 +13,10 @@ class InclusionWithResource:
     resource: type["Resource"]
 
 
-class Resource(Generic[TDb]):
+class Resource(ResourceProtocol, Generic[TDb]):
     # name: ClassVar[str]
     plural_name: ClassVar[Optional[str]]
 
-    Db: ClassVar[Type[TDb]]
     registry: dict[Type[BaseModel], type["Resource"]] = {}
 
     def __init_subclass__(cls) -> None:
@@ -108,7 +107,7 @@ class Resource(Generic[TDb]):
 
     @classmethod
     def get_attributes(cls) -> set[str]:
-        return set(cls.Db.model_fields.keys())
+        return set(cls.Read.model_fields.keys())
 
     def get_related(
         self,
