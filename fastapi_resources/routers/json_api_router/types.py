@@ -25,7 +25,7 @@ class TIncludeParam(str):
 class JALinks(BaseModel):
     """A links-object"""
 
-    self: Optional[str] = ""
+    pass
 
 
 class JALinksWithPagination(JALinks):
@@ -41,12 +41,10 @@ class JAResourceIdentifierObject(BaseModel, Generic[TType]):
 
 
 class JARelationshipsObjectSingle(BaseModel, Generic[TType]):
-    links: Optional[JALinks] = None
     data: Optional[JAResourceIdentifierObject[TType]] = None
 
 
 class JARelationshipsObjectMany(BaseModel, Generic[TType]):
-    links: Optional[JALinks] = None
     data: list[JAResourceIdentifierObject[TType]]
 
 
@@ -54,7 +52,6 @@ class JAResourceObject(BaseModel, Generic[TAttributes, TRelationships, TName]):
     id: str
     type: TName
     attributes: TAttributes
-    links: JALinks
     relationships: TRelationships
 
 

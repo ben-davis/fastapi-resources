@@ -76,7 +76,6 @@ class TestRetrieve:
                 "id": str(sun_id),
                 "type": "star",
                 "attributes": {"name": "Sun", "brightness": 1, "color": ""},
-                "links": {"self": f"/stars/{sun_id}"},
                 "relationships": {
                     "planets": {
                         "data": [
@@ -85,20 +84,14 @@ class TestRetrieve:
                                 "id": str(earth_id),
                             }
                         ],
-                        "links": {
-                            "self": f"/stars/{sun_id}/relationships/planets",
-                        },
                     },
                     "galaxy": {
                         "data": None,
-                        "links": {
-                            "self": f"/stars/{sun_id}/relationships/galaxy",
-                        },
                     },
                 },
             },
             "included": [],
-            "links": {"self": f"/stars/{sun_id}"},
+            "links": {},
         }
 
     def test_retrieve_by_aliased_id(
@@ -116,11 +109,10 @@ class TestRetrieve:
                 "id": "big",
                 "type": "asteroid",
                 "attributes": {},
-                "links": {"self": f"/asteroids/big"},
                 "relationships": {},
             },
             "included": [],
-            "links": {"self": f"/asteroids/big"},
+            "links": {},
         }
 
     def test_performance(self, session: Session, setup_database: OneTimeData):
@@ -152,25 +144,17 @@ class TestRetrieve:
                 "relationships": {
                     "favorite_galaxy": {
                         "data": None,
-                        "links": {
-                            "self": f"/planets/{earth_id}/relationships/favorite_galaxy",
-                        },
                     },
                     "star": {
                         "data": {"type": "star", "id": "1"},
-                        "links": {
-                            "self": f"/planets/{earth_id}/relationships/star",
-                        },
                     },
                 },
-                "links": {"self": f"/planets/{earth_id}"},
             },
             "included": [
                 {
                     "id": str(sun_id),
                     "type": "star",
                     "attributes": {"name": "Sun", "brightness": 1, "color": ""},
-                    "links": {"self": f"/stars/{sun_id}"},
                     "relationships": {
                         "planets": {
                             "data": [
@@ -179,20 +163,14 @@ class TestRetrieve:
                                     "id": str(earth_id),
                                 }
                             ],
-                            "links": {
-                                "self": f"/stars/{sun_id}/relationships/planets",
-                            },
                         },
                         "galaxy": {
                             "data": None,
-                            "links": {
-                                "self": f"/stars/{sun_id}/relationships/galaxy",
-                            },
                         },
                     },
                 }
             ],
-            "links": {"self": f"/planets/{earth_id}?include=star"},
+            "links": {},
         }
 
 
@@ -210,7 +188,6 @@ class TestList:
                     "id": str(sun_id),
                     "type": "star",
                     "attributes": {"name": "Sun", "brightness": 1, "color": ""},
-                    "links": {"self": f"/stars/{sun_id}"},
                     "relationships": {
                         "planets": {
                             "data": [
@@ -219,21 +196,15 @@ class TestList:
                                     "id": str(earth_id),
                                 }
                             ],
-                            "links": {
-                                "self": f"/stars/{sun_id}/relationships/planets",
-                            },
                         },
                         "galaxy": {
                             "data": None,
-                            "links": {
-                                "self": f"/stars/{sun_id}/relationships/galaxy",
-                            },
                         },
                     },
                 }
             ],
             "included": [],
-            "links": {"self": "/stars"},
+            "links": {},
             "meta": {"count": 1},
         }
 
@@ -256,7 +227,6 @@ class TestList:
                     "id": str(sun_id),
                     "type": "star",
                     "attributes": {"name": "Sun", "brightness": 1, "color": ""},
-                    "links": {"self": f"/stars/{sun_id}"},
                     "relationships": {
                         "planets": {
                             "data": [
@@ -265,21 +235,15 @@ class TestList:
                                     "id": str(earth_id),
                                 }
                             ],
-                            "links": {
-                                "self": f"/stars/{sun_id}/relationships/planets",
-                            },
                         },
                         "galaxy": {
                             "data": None,
-                            "links": {
-                                "self": f"/stars/{sun_id}/relationships/galaxy",
-                            },
                         },
                     },
                 }
             ],
             "included": [],
-            "links": {"self": f"/stars?page[limit]=1", "next": "2"},
+            "links": {"next": "2"},
             "meta": {"count": 2},
         }
 
@@ -293,25 +257,18 @@ class TestList:
                     "id": str(priate_id),
                     "type": "star",
                     "attributes": {"name": "Priate", "brightness": 1, "color": ""},
-                    "links": {"self": f"/stars/{priate_id}"},
                     "relationships": {
                         "planets": {
                             "data": [],
-                            "links": {
-                                "self": f"/stars/{priate_id}/relationships/planets",
-                            },
                         },
                         "galaxy": {
                             "data": None,
-                            "links": {
-                                "self": f"/stars/{priate_id}/relationships/galaxy",
-                            },
                         },
                     },
                 }
             ],
             "included": [],
-            "links": {"self": f"/stars?page[limit]=1&page[cursor]=2"},
+            "links": {},
             "meta": {"count": 2},
         }
 
@@ -340,26 +297,18 @@ class TestList:
                     "id": str(priate_id),
                     "type": "star",
                     "attributes": {"name": "Priate", "brightness": 1, "color": ""},
-                    "links": {"self": f"/stars/{priate_id}"},
                     "relationships": {
                         "planets": {
                             "data": [],
-                            "links": {
-                                "self": f"/stars/{priate_id}/relationships/planets",
-                            },
                         },
                         "galaxy": {
                             "data": {"type": "galaxy", "id": str(star_wars_id)},
-                            "links": {
-                                "self": f"/stars/{priate_id}/relationships/galaxy",
-                            },
                         },
                     },
                 },
             ],
             "included": [],
             "links": {
-                "self": f"/stars?page[limit]=1&filter[galaxy.name]={galaxy.name}",
                 "next": "2",
             },
             "meta": {"count": 2},
@@ -395,19 +344,12 @@ class TestList:
                     },
                     "id": str(earth_id),
                     "type": "planet",
-                    "links": {"self": f"/planets/{earth_id}"},
                     "relationships": {
                         "favorite_galaxy": {
                             "data": None,
-                            "links": {
-                                "self": f"/planets/{earth_id}/relationships/favorite_galaxy",
-                            },
                         },
                         "star": {
                             "data": {"id": str(sun_id), "type": "star"},
-                            "links": {
-                                "self": f"/planets/{earth_id}/relationships/star",
-                            },
                         },
                     },
                 },
@@ -417,19 +359,12 @@ class TestList:
                     },
                     "id": str(mustafar.id),
                     "type": "planet",
-                    "links": {"self": f"/planets/{mustafar.id}"},
                     "relationships": {
                         "favorite_galaxy": {
                             "data": None,
-                            "links": {
-                                "self": f"/planets/{mustafar.id}/relationships/favorite_galaxy",
-                            },
                         },
                         "star": {
                             "data": {"id": str(priate.id), "type": "star"},
-                            "links": {
-                                "self": f"/planets/{mustafar.id}/relationships/star",
-                            },
                         },
                     },
                 },
@@ -439,19 +374,12 @@ class TestList:
                     },
                     "id": str(mars.id),
                     "type": "planet",
-                    "links": {"self": f"/planets/{mars.id}"},
                     "relationships": {
                         "favorite_galaxy": {
                             "data": None,
-                            "links": {
-                                "self": f"/planets/{mars.id}/relationships/favorite_galaxy",
-                            },
                         },
                         "star": {
                             "data": {"id": str(sun_id), "type": "star"},
-                            "links": {
-                                "self": f"/planets/{mars.id}/relationships/star",
-                            },
                         },
                     },
                 },
@@ -461,22 +389,15 @@ class TestList:
                     "attributes": {"name": "Sun", "brightness": 1, "color": ""},
                     "id": str(sun_id),
                     "type": "star",
-                    "links": {"self": f"/stars/{sun_id}"},
                     "relationships": {
                         "galaxy": {
                             "data": None,
-                            "links": {
-                                "self": f"/stars/{sun_id}/relationships/galaxy",
-                            },
                         },
                         "planets": {
                             "data": [
                                 {"type": "planet", "id": str(earth_id)},
                                 {"type": "planet", "id": str(mars.id)},
                             ],
-                            "links": {
-                                "self": f"/stars/{sun_id}/relationships/planets",
-                            },
                         },
                     },
                 },
@@ -484,19 +405,12 @@ class TestList:
                     "attributes": {"name": "Priate", "brightness": 1, "color": ""},
                     "id": str(priate.id),
                     "type": "star",
-                    "links": {"self": f"/stars/{priate.id}"},
                     "relationships": {
                         "galaxy": {
                             "data": {"type": "galaxy", "id": "1"},
-                            "links": {
-                                "self": f"/stars/{priate.id}/relationships/galaxy",
-                            },
                         },
                         "planets": {
                             "data": [{"type": "planet", "id": str(mustafar.id)}],
-                            "links": {
-                                "self": f"/stars/{priate.id}/relationships/planets",
-                            },
                         },
                     },
                 },
@@ -504,24 +418,17 @@ class TestList:
                     "attributes": {"name": "Far Far Away"},
                     "id": str(star_wars_galaxy.id),
                     "type": "galaxy",
-                    "links": {"self": f"/galaxys/{star_wars_galaxy.id}"},
                     "relationships": {
                         "stars": {
                             "data": [{"type": "star", "id": str(priate.id)}],
-                            "links": {
-                                "self": f"/galaxys/{star_wars_galaxy.id}/relationships/stars",
-                            },
                         },
                         "favorite_planets": {
                             "data": [],
-                            "links": {
-                                "self": f"/galaxys/{star_wars_galaxy.id}/relationships/favorite_planets",
-                            },
                         },
                     },
                 },
             ],
-            "links": {"self": "/planets?include=star.galaxy"},
+            "links": {},
             "meta": {
                 "count": 3,
             },
@@ -572,26 +479,19 @@ class TestUpdate:
                 "attributes": {"name": "Suntastic", "brightness": 1, "color": ""},
                 "id": str(sun_id),
                 "type": "star",
-                "links": {"self": f"/stars/{sun_id}"},
                 "relationships": {
                     "galaxy": {
                         "data": {"type": "galaxy", "id": str(galaxy.id)},
-                        "links": {
-                            "self": f"/stars/{sun_id}/relationships/galaxy",
-                        },
                     },
                     "planets": {
                         "data": [
                             {"id": str(jupiter.id), "type": "planet"},
                         ],
-                        "links": {
-                            "self": f"/stars/{sun_id}/relationships/planets",
-                        },
                     },
                 },
             },
             "included": [],
-            "links": {"self": f"/stars/{sun_id}"},
+            "links": {},
         }
 
 
@@ -636,26 +536,19 @@ class TestCreate:
                     "name": "Vega",
                     "color": "",
                 },
-                "links": {"self": IsStr},
                 "relationships": {
                     "galaxy": {
                         "data": {"type": "galaxy", "id": str(milky_way.id)},
-                        "links": {
-                            "self": IsStr,
-                        },
                     },
                     "planets": {
                         "data": [
                             {"id": str(earth_id), "type": "planet"},
                         ],
-                        "links": {
-                            "self": IsStr,
-                        },
                     },
                 },
             },
             "included": [],
-            "links": {"self": "/stars"},
+            "links": {},
         }
 
 
@@ -686,24 +579,17 @@ class TestOptionalRelationships:
                 "id": str(galaxy.id),
                 "type": "galaxy",
                 "attributes": {"name": "Milky Way"},
-                "links": {"self": f"/galaxys/{galaxy.id}"},
                 "relationships": {
                     "favorite_planets": {
                         "data": [],
-                        "links": {
-                            "self": f"/galaxys/{galaxy.id}/relationships/favorite_planets",
-                        },
                     },
                     "stars": {
                         "data": [],
-                        "links": {
-                            "self": f"/galaxys/{galaxy.id}/relationships/stars",
-                        },
                     },
                 },
             },
             "included": [],
-            "links": {"self": f"/galaxys/{galaxy.id}"},
+            "links": {},
         }
 
 

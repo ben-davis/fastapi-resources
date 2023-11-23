@@ -342,11 +342,6 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
             relationship_name,
             relationship_info,
         ) in resource.get_relationships().items():
-            links = types.JALinks(
-                self=f"/{resource.plural_name}/{obj.id}/relationships/{relationship_name}",
-                related=f"/{resource.plural_name}/{obj.id}/{relationship_name}",
-            )
-
             # The relationships will have been properly selected, so this should not send
             # another query.
             data = [
@@ -361,13 +356,11 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
 
             if relationship_info.many:
                 relationship_object = types.JARelationshipsObjectMany(
-                    links=links,
                     data=data,
                 )
             else:
                 data = data[0] if data else None
                 relationship_object = types.JARelationshipsObjectSingle(
-                    links=links,
                     data=data,
                 )
 
@@ -399,9 +392,6 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
             id=str(pydantic_object.id),
             type=resource.name,
             attributes=attributes,
-            links=self.build_resource_object_links(
-                id=str(pydantic_object.id), resource=resource
-            ),
             relationships=self.build_resource_object_relationships(
                 obj=obj, resource=resource
             ),
