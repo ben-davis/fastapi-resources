@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import MANYTOONE, ONETOMANY
 
 from fastapi_resources.resources.sqlalchemy import types
@@ -202,3 +202,8 @@ class DeleteResourceMixin:
         self.session.commit()
 
         return {"ok": True}
+
+    def delete_all(self: types.SQLAlchemyResourceProtocol[types.TDb]):
+        where = self.get_where()
+        self.session.execute(delete(self.Db).where(*where))
+        return [], None, 0

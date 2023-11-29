@@ -484,3 +484,17 @@ class TestDelete:
 
         with pytest.raises(sa_exceptions.NoResultFound):
             session.scalars(select(Star).where(Star.id == star.id)).one()
+
+    def test_delete_all(self, session: Session):
+        star = Star(name="Sirius")
+        session.add(star)
+        session.commit()
+        session.refresh(star)
+
+        assert star.id
+
+        resource = StarResource(session=session)
+        resource.delete_all()
+
+        with pytest.raises(sa_exceptions.NoResultFound):
+            session.scalars(select(Star).where(Star.id == star.id)).one()

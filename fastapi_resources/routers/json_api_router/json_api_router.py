@@ -511,14 +511,3 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         return await super()._update(
             id=id, update=update, request=request, background_tasks=background_tasks
         )
-
-    async def _delete(
-        self,
-        *,
-        id: Union[int, str],
-        request: Request,
-        background_tasks: BackgroundTasks,
-    ):
-        return await super()._delete(
-            id=id, request=request, background_tasks=background_tasks
-        )

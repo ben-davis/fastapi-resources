@@ -155,7 +155,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
 
         if resource_class.list:
             self.get(
-                f"",
+                "",
                 response_model=self.ListResponseModel,
                 response_model_exclude_unset=True,
                 summary=f"Get {resource_class.name} list",
@@ -163,7 +163,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
 
         if resource_class.create:
             self.post(
-                f"",
+                "",
                 response_model=self.ReadResponseModel,
                 response_model_exclude_unset=True,
                 summary=f"Create {resource_class.name}",
@@ -181,6 +181,11 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         if resource_class.delete:
             self.delete(f"/{{id}}", summary=f"Delete {resource_class.name}")(
                 self._delete
+            )
+
+        if resource_class.delete_all:
+            self.delete("", summary=f"Delete all {resource_class.name}")(
+                self._delete_all
             )
 
     def _link_actions(self):
@@ -289,6 +294,12 @@ class ResourceRouter(APIRouter, Generic[TResource]):
 
         return await self._await_if_necessary(resource.delete(id=id))
 
+    async def perform_delete_all(self, request: Request, resource: TResource):
+        if not resource.delete_all:
+            raise NotImplementedError("Resource.delete_all not implemented")
+
+        return await self._await_if_necessary(resource.delete_all())
+
     async def _retrieve(self, *, id: Union[int, str], request: Request):
         resource = self.get_resource(request=request)
         if not resource.retrieve:
@@ -387,6 +398,24 @@ class ResourceRouter(APIRouter, Generic[TResource]):
 
         try:
             await self.perform_delete(request=request, resource=resource, id=id)
+        finally:
+            self._process_tasks(
+                background_tasks=background_tasks,
+                resource=resource,
+            )
+
+        return Response(status_code=204)
+
+    async def _delete_all(
+        self,
+        *,
+        request: Request,
+        background_tasks: BackgroundTasks,
+    ):
+        resource = self.get_resource(request=request)
+
+        try:
+            await self.perform_delete_all(request=request, resource=resource)
         finally:
             self._process_tasks(
                 background_tasks=background_tasks,

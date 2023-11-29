@@ -563,6 +563,16 @@ class TestDelete:
 
         assert star not in session
 
+    def test_delete_all(self, session: Session):
+        star = Star(name="Sirius")
+        session.add(star)
+        session.commit()
+
+        response = client.delete(f"/stars")
+        assert response.status_code == 204
+
+        assert star not in session
+
 
 class TestOptionalRelationships:
     def test_doesnt_include_relationship_if_on_the_read_model(self, session: Session):

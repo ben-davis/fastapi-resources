@@ -56,6 +56,7 @@ class ResourceProtocol(Protocol, Generic[TDb, TBaseModel]):
     list: ClassVar[Optional[Callable]] = None
     update: ClassVar[Optional[Callable]] = None
     delete: ClassVar[Optional[Callable]] = None
+    delete_all: ClassVar[Optional[Callable]] = None
     retrieve: ClassVar[Optional[Callable]] = None
 
     inclusions: Inclusions
