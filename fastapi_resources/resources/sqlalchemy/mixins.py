@@ -205,5 +205,8 @@ class DeleteResourceMixin:
 
     def delete_all(self: types.SQLAlchemyResourceProtocol[types.TDb]):
         where = self.get_where()
+
         self.session.execute(delete(self.Db).where(*where))
+        self.session.commit()
+
         return [], None, 0
