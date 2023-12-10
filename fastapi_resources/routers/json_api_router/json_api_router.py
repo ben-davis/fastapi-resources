@@ -481,11 +481,20 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         id: Union[int, str],
         request: Request,
         include: Optional[str] = include_query,
+        background_tasks: BackgroundTasks,
     ):
-        return await super()._retrieve(id=id, request=request)
+        return await super()._retrieve(
+            id=id, request=request, background_tasks=background_tasks
+        )
 
-    async def _list(self, *, request: Request, include: Optional[str] = include_query):
-        return await super()._list(request=request)
+    async def _list(
+        self,
+        *,
+        request: Request,
+        include: Optional[str] = include_query,
+        background_tasks: BackgroundTasks,
+    ):
+        return await super()._list(request=request, background_tasks=background_tasks)
 
     async def _create(
         self,

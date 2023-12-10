@@ -300,22 +300,46 @@ class ResourceRouter(APIRouter, Generic[TResource]):
 
         return await self._await_if_necessary(resource.delete_all())
 
-    async def _retrieve(self, *, id: Union[int, str], request: Request):
+    async def _retrieve(
+        self,
+        *,
+        id: Union[int, str],
+        request: Request,
+        background_tasks: BackgroundTasks,
+    ):
         resource = self.get_resource(request=request)
         if not resource.retrieve:
             raise NotImplementedError("Resource.retrieve not implemented")
 
-        row = resource.retrieve(id=id)
+        try:
+            row = resource.retrieve(id=id)
+        finally:
+            self._process_tasks(
+                background_tasks=background_tasks,
+                resource=resource,
+            )
+
         res = self.build_response(rows=row, resource=resource, request=request)
         return res
 
-    async def _list(self, *, request: Request):
+    async def _list(
+        self,
+        *,
+        request: Request,
+        background_tasks: BackgroundTasks,
+    ):
         resource = self.get_resource(request=request)
         if not resource.list:
             raise NotImplementedError("Resource.list not implemented")
 
         # Next and count are ignored in the base router
-        rows, next, count = resource.list()
+        try:
+            rows, next, count = resource.list()
+        finally:
+            self._process_tasks(
+                background_tasks=background_tasks,
+                resource=resource,
+            )
 
         return self.build_response(
             rows=rows, resource=resource, request=request, count=count, next=next
