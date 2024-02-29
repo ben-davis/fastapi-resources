@@ -203,6 +203,8 @@ class DeleteResourceMixin:
 
         return {"ok": True}
 
+
+class DeleteAllResourceMixin:
     def delete_all(self: types.SQLAlchemyResourceProtocol[types.TDb]):
         where = self.get_where()
 

@@ -12,6 +12,7 @@ from sqlalchemy.orm import (
 
 from fastapi_resources.resources import SQLAlchemyResource
 from fastapi_resources.resources.sqlalchemy import paginators
+from fastapi_resources.resources.sqlalchemy.mixins import DeleteAllResourceMixin
 from tests.resources.sqlalchemy_base import Base
 
 from .planet import Planet, PlanetCreate, PlanetRead
@@ -152,7 +153,7 @@ class PlanetResource(SQLAlchemyResource):
     Create = PlanetCreate
 
 
-class StarResource(SQLAlchemyResource[Star]):
+class StarResource(DeleteAllResourceMixin, SQLAlchemyResource[Star]):
     engine = engine
     name = "star"
     Db = Star
