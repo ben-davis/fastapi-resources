@@ -34,7 +34,7 @@ TResource = TypeVar("TResource", bound=ResourceProtocol)
 @runtime_checkable
 class Action(Protocol):
     detail: bool
-    methods: decorators.methods
+    methods: list[decorators.methods]
     kwargs: dict[str, Any]
 
     def __call__(self):
@@ -194,7 +194,10 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         for action in inspect.getmembers(object=self):
             name, func = action
 
-            if not isinstance(func, Action):
+            # NOTE: This used to use `runtime_checkable` and `isinstance`, but it broke
+            # in 3.12. Python's docs advises to use hasattr anyway, so here we are.
+            is_action = hasattr(func, "detail") and hasattr(func, "methods")
+            if not is_action:
                 continue
 
             for method in func.methods:

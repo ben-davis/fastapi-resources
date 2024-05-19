@@ -4,7 +4,9 @@ from typing import Callable, Literal
 methods = Literal["post", "get", "patch", "delete"]
 
 
-def action(detail: bool, methods: list[methods] = ["get"], **kwargs):
+def action(detail: bool, methods: list[methods] | None = None, **kwargs):
+    methods = methods or ["get"]
+
     def action_decorator(func: Callable):
         func.detail = detail
         func.methods = methods
