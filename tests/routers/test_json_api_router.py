@@ -12,11 +12,13 @@ from tests.conftest import OneTimeData
 from tests.resources.sqlalchemy_models import (
     Asteroid,
     AsteroidResource,
+    Element,
     Galaxy,
     GalaxyResource,
     Planet,
     PlanetResource,
     Star,
+    StarElementAssociation,
     StarResource,
     engine,
 )
@@ -330,16 +332,18 @@ class TestList:
         priate = Star(name="Priate", galaxy=star_wars_galaxy)
         mustafar = Planet(name="Mustafar", star=priate)
 
+        hydrogen = Element(name="hydrogen")
+        hydrogen_association = StarElementAssociation(element=hydrogen, star=priate)
+
         # Add another planet with the OneTimeData star, so we can test inclusion are de-duped.
         mars = Planet(name="Mars", star=setup_database.sun)
 
-        session.add(star_wars_galaxy)
-        session.add(priate)
-        session.add(mustafar)
-        session.add(mars)
+        session.add_all(
+            [star_wars_galaxy, priate, mustafar, mars, hydrogen, hydrogen_association]
+        )
         session.commit()
 
-        response = client.get(f"/planets?include=star.galaxy")
+        response = client.get(f"/planets?include=star.galaxy,star.elements")
 
         assert response.status_code == 200
         assert response.json() == {
@@ -413,7 +417,9 @@ class TestList:
                     "id": str(priate.id),
                     "type": "star",
                     "relationships": {
-                        "elements": {"data": []},
+                        "elements": {
+                            "data": [{"id": str(hydrogen.id), "type": "element"}]
+                        },
                         "galaxy": {
                             "data": {"type": "galaxy", "id": "1"},
                         },
@@ -434,6 +440,12 @@ class TestList:
                             "data": [],
                         },
                     },
+                },
+                {
+                    "attributes": {"name": "hydrogen"},
+                    "id": str(hydrogen.id),
+                    "relationships": {},
+                    "type": "element",
                 },
             ],
             "links": {},

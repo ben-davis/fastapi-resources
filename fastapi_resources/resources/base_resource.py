@@ -1,6 +1,6 @@
 from copy import copy
 from dataclasses import dataclass
-from typing import ClassVar, Generic, Optional, Type
+from typing import ClassVar, Generic, Iterable, Optional, Type
 
 from pydantic.main import BaseModel
 
@@ -129,7 +129,9 @@ class Resource(ResourceProtocol, Generic[TDb]):
                 return []
 
             selected_objs = (
-                selected_objs if isinstance(selected_objs, list) else [selected_objs]
+                list(selected_objs)
+                if isinstance(selected_objs, Iterable)
+                else [selected_objs]
             )
 
             selected_objs = [

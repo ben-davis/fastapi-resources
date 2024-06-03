@@ -8,6 +8,7 @@ from fastapi_resources.resources.sqlalchemy.resources import SQLAlchemyResource
 from tests.conftest import OneTimeData
 from tests.resources.sqlalchemy_models import (
     Element,
+    ElementResource,
     Galaxy,
     GalaxyResource,
     MoonResource,
@@ -15,6 +16,7 @@ from tests.resources.sqlalchemy_models import (
     PlanetResource,
     Star,
     StarCreate,
+    StarElementAssociation,
     StarResource,
     StarUpdate,
     engine,
@@ -147,6 +149,11 @@ class TestRelationships:
         session.add(star)
         session.commit()
 
+        hydrogen = Element(name="hydrogen")
+        hydrogen_association = StarElementAssociation(element=hydrogen, star=star)
+        session.add_all([hydrogen, hydrogen_association])
+        session.commit()
+
         andromeda = Galaxy(name="Andromeda")
         session.add(andromeda)
         session.commit()
@@ -161,7 +168,12 @@ class TestRelationships:
 
         related_objects = resource.get_related(
             obj=galaxy,
-            inclusion=["stars", "planets", "favorite_galaxy", "stars"],
+            inclusion=[
+                "stars",
+                "planets",
+                "favorite_galaxy",
+                "stars",
+            ],
         )
 
         assert related_objects[0].obj == star
@@ -172,6 +184,22 @@ class TestRelationships:
         assert related_objects[2].resource == PlanetResource
         assert related_objects[3].obj == andromeda
         assert related_objects[3].resource == GalaxyResource
+
+        # Test AssociationProxy
+        related_objects = resource.get_related(
+            obj=galaxy,
+            inclusion=[
+                "stars",
+                "elements",
+            ],
+        )
+
+        assert related_objects[0].obj == star
+        assert related_objects[0].resource == StarResource
+        assert related_objects[1].obj == andromedae
+        assert related_objects[1].resource == StarResource
+        assert related_objects[2].obj == hydrogen
+        assert related_objects[2].resource == ElementResource
 
     def test_get_related_works_for_empty_relationships(self, session: Session):
         vega = Star(name="Vega")
