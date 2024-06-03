@@ -341,7 +341,7 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         for (
             relationship_name,
             relationship_info,
-        ) in resource.get_relationships().items():
+        ) in resource.relationships.items():
             # The relationships will have been properly selected, so this should not send
             # another query.
             data = [

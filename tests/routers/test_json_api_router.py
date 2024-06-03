@@ -77,6 +77,7 @@ class TestRetrieve:
                 "type": "star",
                 "attributes": {"name": "Sun", "brightness": 1, "color": ""},
                 "relationships": {
+                    "elements": {"data": []},
                     "planets": {
                         "data": [
                             {
@@ -156,6 +157,7 @@ class TestRetrieve:
                     "type": "star",
                     "attributes": {"name": "Sun", "brightness": 1, "color": ""},
                     "relationships": {
+                        "elements": {"data": []},
                         "planets": {
                             "data": [
                                 {
@@ -189,6 +191,7 @@ class TestList:
                     "type": "star",
                     "attributes": {"name": "Sun", "brightness": 1, "color": ""},
                     "relationships": {
+                        "elements": {"data": []},
                         "planets": {
                             "data": [
                                 {
@@ -228,6 +231,7 @@ class TestList:
                     "type": "star",
                     "attributes": {"name": "Sun", "brightness": 1, "color": ""},
                     "relationships": {
+                        "elements": {"data": []},
                         "planets": {
                             "data": [
                                 {
@@ -258,6 +262,7 @@ class TestList:
                     "type": "star",
                     "attributes": {"name": "Priate", "brightness": 1, "color": ""},
                     "relationships": {
+                        "elements": {"data": []},
                         "planets": {
                             "data": [],
                         },
@@ -298,6 +303,7 @@ class TestList:
                     "type": "star",
                     "attributes": {"name": "Priate", "brightness": 1, "color": ""},
                     "relationships": {
+                        "elements": {"data": []},
                         "planets": {
                             "data": [],
                         },
@@ -390,6 +396,7 @@ class TestList:
                     "id": str(sun_id),
                     "type": "star",
                     "relationships": {
+                        "elements": {"data": []},
                         "galaxy": {
                             "data": None,
                         },
@@ -406,6 +413,7 @@ class TestList:
                     "id": str(priate.id),
                     "type": "star",
                     "relationships": {
+                        "elements": {"data": []},
                         "galaxy": {
                             "data": {"type": "galaxy", "id": "1"},
                         },
@@ -462,6 +470,7 @@ class TestUpdate:
                         "color": "red",
                     },
                     "relationships": {
+                        "elements": {"data": []},
                         "galaxy": {"data": {"type": "galaxy", "id": str(galaxy.id)}},
                         "planets": {
                             "data": [
@@ -480,6 +489,7 @@ class TestUpdate:
                 "id": str(sun_id),
                 "type": "star",
                 "relationships": {
+                    "elements": {"data": []},
                     "galaxy": {
                         "data": {"type": "galaxy", "id": str(galaxy.id)},
                     },
@@ -515,6 +525,7 @@ class TestCreate:
                         "color": "red",
                     },
                     "relationships": {
+                        "elements": {"data": []},
                         "galaxy": {"data": {"type": "galaxy", "id": str(milky_way.id)}},
                         "planets": {
                             "data": [
@@ -537,6 +548,7 @@ class TestCreate:
                     "color": "",
                 },
                 "relationships": {
+                    "elements": {"data": []},
                     "galaxy": {
                         "data": {"type": "galaxy", "id": str(milky_way.id)},
                     },

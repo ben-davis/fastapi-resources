@@ -38,12 +38,13 @@ class Resource(ResourceProtocol, Generic[TDb]):
         *args,
         **kwargs,
     ):
-        if inclusions:
-            self.validate_inclusions(inclusions=inclusions)
-
         self.inclusions = inclusions or []
         self.context = context or {}
         self.tasks = []
+        self.relationships = self.get_relationships()
+
+        if inclusions:
+            self.validate_inclusions(inclusions=inclusions)
 
     def close(self):
         pass
@@ -67,9 +68,8 @@ class Resource(ResourceProtocol, Generic[TDb]):
 
         resource = self.registry[relationship_info.schema_with_relationships.schema]
 
-        zipped_inclusions = [
-            InclusionWithResource(field=current_inclusion, resource=resource)
-        ]
+        field = relationship_info.loaded_field or current_inclusion
+        zipped_inclusions = [InclusionWithResource(field=field, resource=resource)]
 
         if (
             next_relationships := relationship_info.schema_with_relationships.relationships
@@ -86,7 +86,7 @@ class Resource(ResourceProtocol, Generic[TDb]):
 
     def validate_inclusions(self, inclusions: Inclusions):
         """Validate the inclusions by walking the relationships."""
-        relationships = self.get_relationships()
+        relationships = self.relationships
 
         for inclusion in inclusions:
             self._zipped_inclusions_with_resource(
@@ -97,7 +97,7 @@ class Resource(ResourceProtocol, Generic[TDb]):
         self, inclusion: list[str]
     ) -> list[InclusionWithResource]:
         return self._zipped_inclusions_with_resource(
-            _relationships=self.get_relationships(),
+            _relationships=self.relationships,
             _inclusion=inclusion,
         )
 
@@ -154,5 +154,5 @@ class Resource(ResourceProtocol, Generic[TDb]):
             return selected_objs
 
         return select_objs(
-            _obj=obj, _inclusion=inclusion, _relationships=self.get_relationships()
+            _obj=obj, _inclusion=inclusion, _relationships=self.relationships
         )

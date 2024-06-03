@@ -4,6 +4,7 @@ from typing import (
     ClassVar,
     Generic,
     List,
+    Mapping,
     Optional,
     Protocol,
     Set,
@@ -31,6 +32,7 @@ class RelationshipInfo:
     schema_with_relationships: SchemaWithRelationships
     many: bool
     field: str
+    loaded_field: str | None = None
 
 
 Relationships = dict[str, RelationshipInfo]
@@ -62,6 +64,7 @@ class ResourceProtocol(Protocol, Generic[TDb, TBaseModel]):
     inclusions: Inclusions
     context: dict = {}
     tasks: List = []
+    relationships: Relationships
 
     def __init__(*args, **kwargs):
         pass
@@ -69,7 +72,7 @@ class ResourceProtocol(Protocol, Generic[TDb, TBaseModel]):
     @classmethod
     def get_relationships(
         cls,
-    ) -> dict[str, RelationshipInfo]:
+    ) -> Relationships:
         ...
 
     @classmethod

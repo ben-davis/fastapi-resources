@@ -7,6 +7,7 @@ from fastapi_resources.resources.sqlalchemy.exceptions import NotFound
 from fastapi_resources.resources.sqlalchemy.resources import SQLAlchemyResource
 from tests.conftest import OneTimeData
 from tests.resources.sqlalchemy_models import (
+    Element,
     Galaxy,
     GalaxyResource,
     MoonResource,
@@ -62,7 +63,7 @@ class TestRelationships:
 
     def test_is_recursive_graph(self, session: Session):
         resource = GalaxyResource(session=session)
-        relationships = resource.get_relationships()
+        relationships = resource.relationships
 
         # Galaxy -> Stars
         galaxy_to_stars = relationships["stars"]
@@ -88,6 +89,13 @@ class TestRelationships:
             favorite_planets_to_star.schema_with_relationships
             is galaxy_to_stars.schema_with_relationships
         )
+
+        # Galaxy -> Stars -> Elements
+        stars_to_elements = galaxy_to_stars.schema_with_relationships.relationships[
+            "elements"
+        ]
+        assert stars_to_elements.schema_with_relationships.schema == Element
+        assert stars_to_elements.many
 
         # Galaxy -> Stars -> Planets
         stars_to_planets = galaxy_to_stars.schema_with_relationships.relationships[

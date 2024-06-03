@@ -2,6 +2,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 from sqlalchemy import ForeignKey, create_engine
+from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -26,6 +27,18 @@ engine = create_engine(
 )
 
 
+class Element(Base):
+    __tablename__ = "element"
+
+    id: Mapped[int] = mapped_column(primary_key=True, init=False)
+    name: Mapped[str]
+
+
+class ElementRead(BaseModel):
+    id: int
+    name: str
+
+
 class Star(Base):
     __tablename__ = "star"
 
@@ -44,6 +57,33 @@ class Star(Base):
         default=None,
     )
 
+    element_associations: Mapped[list["StarElementAssociation"]] = relationship(
+        back_populates="star",
+        cascade="save-update, merge",
+        default_factory=list,
+    )
+    elements: AssociationProxy[list[Element]] = association_proxy(
+        "element_associations",
+        "element",
+        init=False,
+    )
+
+
+class StarElementAssociation(Base):
+    __tablename__ = "link_data_topic_association"
+
+    element_id: Mapped[str] = mapped_column(
+        ForeignKey("element.id"),
+        primary_key=True,
+        init=False,
+    )
+    star_id: Mapped[str] = mapped_column(
+        ForeignKey("star.id"), primary_key=True, init=False
+    )
+
+    element: Mapped[Element] = relationship()
+    star: Mapped[Star] = relationship()
+
 
 class StarCreate(BaseModel):
     name: str
@@ -57,7 +97,7 @@ class StarRead(BaseModel):
     color: str
     brightness: int = 1
 
-    __relationships__ = ["planets", "galaxy"]
+    __relationships__ = ["planets", "galaxy", "elements"]
 
 
 class StarUpdate(BaseModel):
@@ -200,3 +240,10 @@ class AsteroidResource(SQLAlchemyResource[Asteroid]):
     Db = Asteroid
     Read = AsteroidRead
     id_field = "name"
+
+
+class ElementResource(SQLAlchemyResource[Element]):
+    engine = engine
+    name = "element"
+    Db = Element
+    Read = ElementRead

@@ -16,7 +16,7 @@ class CreateResourceMixin:
     ):
         create_kwargs = attributes | kwargs
         relationships = relationships or {}
-        model_relationships = self.get_relationships()
+        model_relationships = self.relationships
         did_set_relationship = False
 
         for field, related_ids in relationships.items():
@@ -105,7 +105,7 @@ class UpdateResourceMixin:
         for key, value in list(attributes.items()) + list(kwargs.items()):
             setattr(row, key, value)
 
-        model_relationships = self.get_relationships()
+        model_relationships = self.relationships
 
         if relationships:
             for field, related_ids in relationships.items():

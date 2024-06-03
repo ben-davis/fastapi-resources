@@ -35,6 +35,7 @@ class SQLAlchemyRelationshipInfo:
     field: str
     direction: RelationshipDirection
     update_field: str
+    loaded_field: str | None = None
 
 
 Relationships = dict[str, SQLAlchemyRelationshipInfo]

@@ -1,14 +1,97 @@
 import copy
+from dataclasses import dataclass
 from typing import Any, ClassVar, Generic, Optional, Type
 
 from sqlalchemy import exc as sa_exceptions
 from sqlalchemy import func, inspect, select
-from sqlalchemy.orm import MANYTOONE, DeclarativeBase, Session, joinedload
+from sqlalchemy.ext.associationproxy import (
+    AssociationProxy,
+    AssociationProxyExtensionType,
+)
+from sqlalchemy.orm import (
+    MANYTOONE,
+    DeclarativeBase,
+    Mapper,
+    RelationshipDirection,
+    Session,
+    joinedload,
+)
 
 from fastapi_resources.resources import base_resource
 from fastapi_resources.resources.sqlalchemy.exceptions import NotFound
 
 from . import types
+
+
+@dataclass
+class SAInstrumentedRelationship:
+    direction: RelationshipDirection
+    update_field: str
+    many: bool
+    related_schema: Type[DeclarativeBase]
+    loaded_field: str | None = None
+
+
+def get_instrumented_relationships_from_schema(inspected: Mapper[DeclarativeBase]):
+    return {
+        field: SAInstrumentedRelationship(
+            related_schema=relationship.mapper.class_,
+            many=relationship.uselist or False,
+            direction=relationship.direction,
+            update_field=list(
+                relationship.local_columns
+                if relationship.direction == MANYTOONE
+                else relationship.remote_side
+            )[0].name,
+        )
+        for field, relationship in inspected.relationships.items()
+    }
+
+
+def get_instrumented_relationships_from_schema_association_proxies(
+    inspected: Mapper[DeclarativeBase],
+):
+    proxies: list[tuple[str, AssociationProxy]] = [
+        (field, desc)
+        for field, desc in inspected.all_orm_descriptors.items()
+        if desc.extension_type is AssociationProxyExtensionType.ASSOCIATION_PROXY
+    ]  # type: ignore
+
+    sa_relationships: dict[str, SAInstrumentedRelationship] = {}
+
+    for field, proxy in proxies:
+        # This is the field on the model that the proxy proxies to
+        target_collection = proxy.target_collection
+        # This is the attribute on the target collection that gets pulled
+        value_attr = proxy.value_attr
+
+        # It can be any field type, but we only care about proxies to relationships
+        target_collection_relationship = inspected.relationships.get(target_collection)
+        if not target_collection_relationship:
+            continue
+
+        # The schema of the association table
+        association_schema: type[
+            DeclarativeBase
+        ] = target_collection_relationship.mapper.class_
+        association_inspected = inspect(association_schema)
+        # The relationship on the association that we're extracting
+        target_relationship = association_inspected.relationships[value_attr]
+
+        sa_relationships[field] = SAInstrumentedRelationship(
+            related_schema=target_relationship.mapper.class_,
+            # We want to use the `many` based on the field we're proxing to
+            many=target_collection_relationship.uselist or False,
+            # Same with the direction
+            direction=target_collection_relationship.direction,
+            # The update_field isn't supported for associations, at least right now
+            update_field="",
+            # We can't load from the association proxy, instead we load from the
+            # field the proxy uses
+            loaded_field=target_collection,
+        )
+
+    return sa_relationships
 
 
 def get_relationships_from_schema(
@@ -23,34 +106,38 @@ def get_relationships_from_schema(
     parent_key: Optional[str] = None,
 ):
     schema_cache = schema_cache or {}
-
     relationships = {}
-
     parent_schema_with_relationships = types.SchemaWithRelationships(
         schema=schema,
         relationships=relationships,
     )
+    inspected = inspect(schema)
 
     # Just a sanity check. This function should never be called for a relationship
     # that already exists.
     assert (parent_key, schema) not in schema_cache
-
     schema_cache[(parent_key, schema)] = parent_schema_with_relationships
 
-    for field, sqlalchemy_relationship in inspect(schema).relationships.items():
-        related_schema = sqlalchemy_relationship.mapper.class_
-        many = sqlalchemy_relationship.uselist
+    # Get relationships from actual relationships()
+    sa_relationships = get_instrumented_relationships_from_schema(inspected=inspected)
+    # Get relationships via AssociationProxies
+    sa_relationships.update(
+        get_instrumented_relationships_from_schema_association_proxies(
+            inspected=inspected
+        )
+    )
+
+    # Build SQLAlchemyRelationshipInfo objects from the instrumented relationships
+    for field, sqlalchemy_relationship in sa_relationships.items():
+        related_schema = sqlalchemy_relationship.related_schema
+        many = sqlalchemy_relationship.many
 
         # Used to uniquely identify the related schema relative to a parent
         new_parent_key = f"{schema}.{field}"
 
         # TODO: Handle MANYTOMANY
         direction = sqlalchemy_relationship.direction
-        update_field = list(
-            sqlalchemy_relationship.local_columns
-            if direction == MANYTOONE
-            else sqlalchemy_relationship.remote_side
-        )[0].name
+        update_field = sqlalchemy_relationship.update_field
 
         # If this branch already contains the schema with the same parent,
         # we can reuse the relationship to avoid a cycle.
@@ -61,6 +148,7 @@ def get_relationships_from_schema(
                 field=field,
                 direction=direction,
                 update_field=update_field,
+                loaded_field=sqlalchemy_relationship.loaded_field,
             )
             continue
 
@@ -70,7 +158,14 @@ def get_relationships_from_schema(
             continue
 
         # TODO: Can we cache the relationships when added to the registry?
-        backpopulated_field = inspect(schema).relationships[field].back_populates
+        # NOTE: If there's no relationship on the schema, that means this is a
+        # simulated relationship via an AssociationProxy. Those don't have
+        # backpopulated fields, so we can safely set this to "".
+        backpopulated_field = (
+            inspected.relationships[field].back_populates
+            if field in inspected.relationships
+            else ""
+        )
 
         get_relationships_from_schema(
             schema=related_schema,
@@ -93,6 +188,7 @@ def get_relationships_from_schema(
             field=field,
             direction=direction,
             update_field=update_field,
+            loaded_field=sqlalchemy_relationship.loaded_field,
         )
 
     return relationships
@@ -130,8 +226,6 @@ class BaseSQLAlchemyResource(
         else:
             assert self.engine, "A session or an engine must be given."
             self.session = Session(self.engine)
-
-        # TODO: Save the relationships on the instance at instantiation for caching
 
         if Paginator := getattr(self, "Paginator", None):
             self.paginator = Paginator(cursor=cursor, limit=limit)

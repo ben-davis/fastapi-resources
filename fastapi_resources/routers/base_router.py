@@ -242,7 +242,7 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         resource: TResource,
         update: dict,
     ):
-        resource_relationships = resource.get_relationships()
+        resource_relationships = resource.relationships
 
         relationships = {}
 
