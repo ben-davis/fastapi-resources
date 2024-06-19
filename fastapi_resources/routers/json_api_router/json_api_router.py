@@ -1,4 +1,15 @@
-from typing import Callable, Dict, List, Literal, Optional, Tuple, Type, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 from fastapi import BackgroundTasks, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -151,6 +162,13 @@ def parse_exception(exception: Exception | RequestValidationError):
         ]
 
     return {"errors": errors}
+
+
+def extract_obj(obj: Any | tuple[Any, Any]):
+    if isinstance(obj, tuple):
+        return obj[0]
+
+    return obj
 
 
 class JSONAPIResourceRoute(base_router.ResourceRoute):
@@ -354,7 +372,7 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
             # another query.
             data = [
                 self.build_resource_identifier_object(
-                    related_obj=related_obj.obj,
+                    related_obj=extract_obj(related_obj.obj),
                     resource=resource,
                     relationship_info=relationship_info,
                 )
@@ -435,7 +453,10 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
 
         for row in rows:
             for inclusion in inclusions:
-                selected_objs = resource.get_related(obj=row, inclusion=inclusion)
+                extracted_obj = extract_obj(row)
+                selected_objs = resource.get_related(
+                    obj=extracted_obj, inclusion=inclusion
+                )
 
                 for selected_obj in selected_objs:
                     obj = selected_obj.obj
