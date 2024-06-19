@@ -77,6 +77,7 @@ class TestRetrieve:
             "data": {
                 "id": str(sun_id),
                 "type": "star",
+                "meta": {},
                 "attributes": {"name": "Sun", "brightness": 1, "color": ""},
                 "relationships": {
                     "elements": {"data": []},
@@ -113,6 +114,7 @@ class TestRetrieve:
                 "type": "asteroid",
                 "attributes": {},
                 "relationships": {},
+                "meta": {},
             },
             "included": [],
             "links": {},
@@ -144,6 +146,7 @@ class TestRetrieve:
                     "name": "Earth",
                 },
                 "type": "planet",
+                "meta": {},
                 "relationships": {
                     "favorite_galaxy": {
                         "data": None,
@@ -157,6 +160,7 @@ class TestRetrieve:
                 {
                     "id": str(sun_id),
                     "type": "star",
+                    "meta": {},
                     "attributes": {"name": "Sun", "brightness": 1, "color": ""},
                     "relationships": {
                         "elements": {"data": []},
@@ -191,6 +195,7 @@ class TestList:
                 {
                     "id": str(sun_id),
                     "type": "star",
+                    "meta": {},
                     "attributes": {"name": "Sun", "brightness": 1, "color": ""},
                     "relationships": {
                         "elements": {"data": []},
@@ -231,6 +236,7 @@ class TestList:
                 {
                     "id": str(sun_id),
                     "type": "star",
+                    "meta": {},
                     "attributes": {"name": "Sun", "brightness": 1, "color": ""},
                     "relationships": {
                         "elements": {"data": []},
@@ -262,6 +268,7 @@ class TestList:
                 {
                     "id": str(priate_id),
                     "type": "star",
+                    "meta": {},
                     "attributes": {"name": "Priate", "brightness": 1, "color": ""},
                     "relationships": {
                         "elements": {"data": []},
@@ -303,6 +310,7 @@ class TestList:
                 {
                     "id": str(priate_id),
                     "type": "star",
+                    "meta": {},
                     "attributes": {"name": "Priate", "brightness": 1, "color": ""},
                     "relationships": {
                         "elements": {"data": []},
@@ -354,6 +362,7 @@ class TestList:
                     },
                     "id": str(earth_id),
                     "type": "planet",
+                    "meta": {},
                     "relationships": {
                         "favorite_galaxy": {
                             "data": None,
@@ -369,6 +378,7 @@ class TestList:
                     },
                     "id": str(mustafar.id),
                     "type": "planet",
+                    "meta": {},
                     "relationships": {
                         "favorite_galaxy": {
                             "data": None,
@@ -384,6 +394,7 @@ class TestList:
                     },
                     "id": str(mars.id),
                     "type": "planet",
+                    "meta": {},
                     "relationships": {
                         "favorite_galaxy": {
                             "data": None,
@@ -399,6 +410,7 @@ class TestList:
                     "attributes": {"name": "Sun", "brightness": 1, "color": ""},
                     "id": str(sun_id),
                     "type": "star",
+                    "meta": {},
                     "relationships": {
                         "elements": {"data": []},
                         "galaxy": {
@@ -416,6 +428,7 @@ class TestList:
                     "attributes": {"name": "Priate", "brightness": 1, "color": ""},
                     "id": str(priate.id),
                     "type": "star",
+                    "meta": {},
                     "relationships": {
                         "elements": {
                             "data": [{"id": str(hydrogen.id), "type": "element"}]
@@ -432,6 +445,7 @@ class TestList:
                     "attributes": {"name": "Far Far Away"},
                     "id": str(star_wars_galaxy.id),
                     "type": "galaxy",
+                    "meta": {},
                     "relationships": {
                         "stars": {
                             "data": [{"type": "star", "id": str(priate.id)}],
@@ -446,6 +460,7 @@ class TestList:
                     "id": str(hydrogen.id),
                     "relationships": {},
                     "type": "element",
+                    "meta": {},
                 },
             ],
             "links": {},
@@ -453,6 +468,8 @@ class TestList:
                 "count": 3,
             },
         }
+
+        response = client.get(f"/galaxy?include=favorite_planets.star.elements")
 
 
 class TestUpdate:
@@ -474,6 +491,7 @@ class TestUpdate:
             json={
                 "data": {
                     "type": "star",
+                    "meta": {},
                     "id": str(sun_id),
                     "attributes": {
                         "name": "Suntastic",
@@ -500,6 +518,7 @@ class TestUpdate:
                 "attributes": {"name": "Suntastic", "brightness": 1, "color": ""},
                 "id": str(sun_id),
                 "type": "star",
+                "meta": {},
                 "relationships": {
                     "elements": {"data": []},
                     "galaxy": {
@@ -530,6 +549,7 @@ class TestCreate:
             json={
                 "data": {
                     "type": "star",
+                    "meta": {},
                     "attributes": {
                         "name": "Vega",
                         # This is a valid attribute, but is not included in Create, so
@@ -553,6 +573,7 @@ class TestCreate:
         assert response.json() == {
             "data": {
                 "type": "star",
+                "meta": {},
                 "id": IsStr,
                 "attributes": {
                     "brightness": 1,
@@ -612,6 +633,7 @@ class TestOptionalRelationships:
             "data": {
                 "id": str(galaxy.id),
                 "type": "galaxy",
+                "meta": {},
                 "attributes": {"name": "Milky Way"},
                 "relationships": {
                     "favorite_planets": {

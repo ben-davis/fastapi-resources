@@ -229,8 +229,8 @@ class ResourceRouter(APIRouter, Generic[TResource]):
 
     def build_response(
         self,
+        rows: Union[Any, List[Any]],
         resource: TResource,
-        rows: Union[BaseModel, List[BaseModel]],
         request: Request,
         next: Optional[str] = None,
         count: Optional[int] = None,

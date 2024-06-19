@@ -1,4 +1,4 @@
-from typing import Callable, List, Literal, Optional, Type, TypeVar, Union
+from typing import Callable, Dict, List, Literal, Optional, Tuple, Type, TypeVar, Union
 
 from fastapi import BackgroundTasks, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -99,6 +99,10 @@ def get_attributes_model_for_model(
     return Attributes
 
 
+def get_meta_for_resource(resource_class: type[TResource]):
+    return resource_class.Meta or Dict
+
+
 def get_model_for_resource_class(
     method: str, model: type[BaseModel], resource_class: type[TResource]
 ):
@@ -108,11 +112,13 @@ def get_model_for_resource_class(
     Relationships = get_relationships_model_for_model(
         method=method, model=model, resource_class=resource_class
     )
+    Meta = get_meta_for_resource(resource_class=resource_class)
 
     return types.JAResourceObject[
         Attributes,
         Relationships,
         Literal[(resource_class.name,)],  # type: ignore
+        Meta,
     ]
 
 
@@ -216,8 +222,9 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
             model=self.resource_class.Read,
             resource_class=self.resource_class,
         )
+        Meta = get_meta_for_resource(resource_class=self.resource_class)
 
-        return types.JAResponseSingle[Attributes, Relationships, Name, Included]
+        return types.JAResponseSingle[Attributes, Relationships, Name, Included, Meta]
 
     def get_list_response_model(self):
         included_schemas = self.get_included_schema(method="list")
@@ -234,16 +241,17 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
             model=self.resource_class.Read,
             resource_class=self.resource_class,
         )
+        ResourceMeta = get_meta_for_resource(resource_class=self.resource_class)
 
         has_pagination = hasattr(self.resource_class, "Paginator")
 
-        Meta = create_model(
+        ListMeta = create_model(
             f"{self.resource_class.Read.__name__}__list__Meta", count=(int, ...)
         )
         Links = types.JALinksWithPagination if has_pagination else types.JALinks
 
         return types.JAResponseList[
-            Attributes, Relationships, Name, Included, Meta, Links
+            Attributes, Relationships, Name, Included, ListMeta, Links, ResourceMeta
         ]
 
     def get_update_model(self):
@@ -370,7 +378,9 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         # But for to-many, we only include it if it's in inclusions.
         return relationships
 
-    def build_resource_object(self, obj: types.Object, resource: TResource):
+    def build_resource_object(
+        self, obj: types.Object | Tuple[types.Object, types.TMeta], resource: TResource
+    ):
         pydantic_object = resource.Read.model_validate(
             obj, from_attributes=True, strict=False
         )
@@ -388,6 +398,10 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
             if key in valid_attributes
         }
 
+        meta = {}
+        if isinstance(obj, tuple):
+            obj, meta = obj
+
         resource_object = types.JAResourceObject(
             id=str(pydantic_object.id),
             type=resource.name,
@@ -395,6 +409,7 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
             relationships=self.build_resource_object_relationships(
                 obj=obj, resource=resource
             ),
+            meta=meta,
         )
 
         return resource_object
@@ -436,11 +451,11 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
         # Get top-level resource links
         links = self.build_document_links(request=request, next=next)
 
-        meta = {
-            "count": count,
-        }
-
         if many:
+            meta = {
+                "count": count,
+            }
+
             return types.JAResponseList(
                 data=data, included=included, links=links, meta=meta
             )

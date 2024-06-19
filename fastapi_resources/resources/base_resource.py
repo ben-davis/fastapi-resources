@@ -148,6 +148,7 @@ class Resource(ResourceProtocol, Generic[TDb]):
                         for nested_obj in select_objs(
                             _obj=selected_obj.obj,
                             _inclusion=next_inclusion,
+                            # I think the bug I see on cool stuff comes about from nesteing proxies
                             _relationships=relationship_info.schema_with_relationships.relationships,
                         )
                     ],

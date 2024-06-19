@@ -53,6 +53,7 @@ class ResourceProtocol(Protocol, Generic[TDb, TBaseModel]):
 
     Create: ClassVar[Optional[Type[TBaseModel]]]
     Update: ClassVar[Optional[Type[TBaseModel]]]
+    Meta: ClassVar[Optional[Type[TBaseModel]]] = None
 
     create: ClassVar[Optional[Callable]] = None
     list: ClassVar[Optional[Callable]] = None
