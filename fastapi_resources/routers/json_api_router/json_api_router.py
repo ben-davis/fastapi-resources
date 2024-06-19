@@ -441,9 +441,14 @@ class JSONAPIResourceRouter(base_router.ResourceRouter[TResource]):
                     obj = selected_obj.obj
                     related_resource = selected_obj.resource
 
-                    included_resources[
-                        (related_resource.name, obj.id)
-                    ] = self.build_resource_object(obj=obj, resource=related_resource())
+                    if isinstance(obj, tuple):
+                        obj_hash = (related_resource.name, obj[0].id)
+                    else:
+                        obj_hash = (related_resource.name, obj.id)
+
+                    included_resources[obj_hash] = self.build_resource_object(
+                        obj=obj, resource=related_resource()
+                    )
 
         data = [self.build_resource_object(obj=row, resource=resource) for row in rows]
         included = list(included_resources.values())
