@@ -158,12 +158,31 @@ class TestRelationships:
         session.add(andromeda)
         session.commit()
 
-        andromedae = Star(name="Andromedae", galaxy=galaxy)
+        andromedae = Star(name="Andromedae", galaxy=andromeda)
         session.add(andromedae)
         session.commit()
 
-        planet = Planet(name="Earth", star=star, favorite_galaxy=andromeda)
+        planet = Planet(name="Earth", star=star, favorite_galaxy=galaxy)
         session.add(planet)
+        session.commit()
+
+        planet_resource = PlanetResource(
+            session=session,
+            inclusions=[],
+        )
+        related_objects = planet_resource.get_related(
+            obj=planet,
+            inclusion=[
+                "favorite_galaxy",
+                "stars",
+                "elements",
+            ],
+        )
+        assert related_objects[0].obj == galaxy
+        assert related_objects[1].obj == star
+        assert related_objects[2].obj == hydrogen
+
+        galaxy.favorite_planets.append(planet)
         session.commit()
 
         related_objects = resource.get_related(
@@ -178,25 +197,24 @@ class TestRelationships:
 
         assert related_objects[0].obj == star
         assert related_objects[0].resource == StarResource
-        assert related_objects[1].obj == andromedae
-        assert related_objects[1].resource == StarResource
-        assert related_objects[2].obj == planet
-        assert related_objects[2].resource == PlanetResource
-        assert related_objects[3].obj == andromeda
-        assert related_objects[3].resource == GalaxyResource
+        assert related_objects[1].obj == planet
+        assert related_objects[1].resource == PlanetResource
+        assert related_objects[2].obj == galaxy
+        assert related_objects[2].resource == GalaxyResource
 
         # Test AssociationProxy
         related_objects = resource.get_related(
             obj=galaxy,
             inclusion=[
-                "stars",
+                "favorite_planets",
+                "star",
                 "elements",
             ],
         )
 
-        assert related_objects[0].obj == star
-        assert related_objects[0].resource == StarResource
-        assert related_objects[1].obj == andromedae
+        assert related_objects[0].obj == planet
+        assert related_objects[0].resource == PlanetResource
+        assert related_objects[1].obj == star
         assert related_objects[1].resource == StarResource
         assert related_objects[2].obj == hydrogen
         assert related_objects[2].resource == ElementResource
@@ -398,13 +416,19 @@ class TestCreate:
 
         star_create = resource.create(
             attributes=StarCreate(name="Milky Way").model_dump(exclude_unset=True),
-            relationships={"planets": [setup_database.earth_id]},
+            relationships={
+                "planets": [setup_database.earth_id],
+                "elements": [setup_database.element_id],
+            },
             name="Passed Manually",
         )
 
         assert star_create.name == "Passed Manually"
+
         assert len(star_create.planets) == 1
         assert str(star_create.planets[0].id) == setup_database.earth_id
+        assert len(star_create.elements) == 1
+        assert star_create.elements[0].id == setup_database.element_id
 
     def test_required_relationships(
         self, session: Session, setup_database: OneTimeData
@@ -465,15 +489,12 @@ class TestUpdate:
         earth = Planet(name="Earth", star=other_star)
         mars = Planet(name="Mars", star=other_star)
         mercury = Planet(name="Mercury", star=other_star)
+        hydrogen = Element(name="Hydrogen")
 
         # No default galaxy, but give it a planet
         star.planets.append(mercury)
 
-        session.add(star)
-        session.add(milky_way)
-        session.add(earth)
-        session.add(mars)
-        session.add(mercury)
+        session.add_all([star, milky_way, earth, mars, mercury, hydrogen])
 
         session.commit()
         session.refresh(star)
@@ -495,6 +516,7 @@ class TestUpdate:
                     mars.id,
                 ],
                 "galaxy": milky_way.id,
+                "elements": [hydrogen.id],
             },
         )
 

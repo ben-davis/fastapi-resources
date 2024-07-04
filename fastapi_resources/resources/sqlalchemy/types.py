@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import ClassVar, Generic, Optional, Protocol, Type, TypeVar
 
 from pydantic import BaseModel
-from sqlalchemy import Select
+from sqlalchemy import ColumnExpressionArgument, Select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, RelationshipDirection, Session
 
@@ -85,7 +85,7 @@ class SQLAlchemyResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb])
     def get_select(self) -> Select[TDb]:
         ...
 
-    def get_where(self) -> list[str]:
+    def get_where(self) -> list[ColumnExpressionArgument[bool]]:
         ...
 
     def get_count_select(self) -> Select[TDb]:

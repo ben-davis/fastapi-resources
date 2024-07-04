@@ -1,7 +1,7 @@
 from typing import Optional
 
-from sqlalchemy import delete, select, update
-from sqlalchemy.orm import MANYTOONE, ONETOMANY
+from sqlalchemy import delete, select
+from sqlalchemy.orm import MANYTOONE
 
 from fastapi_resources.resources.sqlalchemy import types
 from fastapi_resources.resources.sqlalchemy.exceptions import NotFound
@@ -17,7 +17,6 @@ class CreateResourceMixin:
         create_kwargs = attributes | kwargs
         relationships = relationships or {}
         model_relationships = self.relationships
-        did_set_relationship = False
 
         for field, related_ids in relationships.items():
             relationship = model_relationships[field]
@@ -48,45 +47,15 @@ class CreateResourceMixin:
                 raise NotFound()
 
             if direction == MANYTOONE:
-                # Can update locally via a setattr, using the field name and the resolved
-                # object.
-                create_kwargs[field] = results[0]
-                did_set_relationship = True
+                results = results[0]
+
+            # Can update locally via a setattr, using the field name and the resolved
+            # object.
+            create_kwargs[field] = results
 
         row = self.Db(**create_kwargs)
         self.session.add(row)
         self.session.commit()
-
-        # Update many relationships that require a separate update on the relationship table
-        for field, related_ids in relationships.items():
-            relationship = model_relationships[field]
-            direction = relationship.direction
-
-            if direction != ONETOMANY:
-                continue
-
-            assert isinstance(
-                related_ids, list
-            ), "A list of IDs must be provided for {field}"
-
-            RelatedResource = self.registry[
-                relationship.schema_with_relationships.schema
-            ]
-            related_db_model = RelatedResource.Db
-            related_resource = RelatedResource(context=self.context)
-            related_where = related_resource.get_where()
-
-            # Update the related objects
-            self.session.execute(
-                update(related_db_model)
-                .where(related_db_model.id.in_(related_ids), *related_where)
-                .values({relationship.update_field: row.id})
-            )
-
-            did_set_relationship = True
-
-        if did_set_relationship:
-            self.session.refresh(row)
 
         return row
 
@@ -122,43 +91,20 @@ class UpdateResourceMixin:
 
                 # Do a select to check we have permission
                 related_resource = RelatedResource(context=self.context)
-
-                if related_where := related_resource.get_where():
-                    results = self.session.scalars(
-                        select(related_db_model).where(
-                            related_db_model.id.in_(new_related_ids), *related_where
-                        )
-                    ).all()
-
-                    if len(results) != len(new_related_ids):
-                        raise NotFound(f"{related_resource.name} not found")
-
-                if direction == ONETOMANY:
-                    assert isinstance(
-                        related_ids, list
-                    ), "A list of IDs must be provided for {field}"
-
-                    # Update the related objects
-                    self.session.execute(
-                        update(related_db_model)
-                        .where(related_db_model.id.in_(new_related_ids))
-                        .values({relationship.update_field: id})
+                results = self.session.scalars(
+                    select(related_db_model).where(
+                        related_db_model.id.in_(new_related_ids),
+                        *related_resource.get_where(),
                     )
+                ).all()
 
-                    # Detach the old related objects
-                    # NOTE: This will raise if the foreign key is required. Is this OK?
-                    self.session.execute(
-                        update(related_db_model)
-                        .where(
-                            getattr(related_db_model, relationship.update_field) == id,
-                            related_db_model.id.not_in(new_related_ids),
-                        )
-                        .values({relationship.update_field: None})
-                    )
+                if len(results) != len(new_related_ids):
+                    raise NotFound(f"{related_resource.name} not found")
 
-                elif direction == MANYTOONE:
-                    # Can update locally via a setattr
-                    setattr(row, relationship.update_field, related_ids)
+                if direction == MANYTOONE:
+                    results = results[0]
+
+                setattr(row, relationship.field, results)
 
         self.session.add(row)
         self.session.commit()

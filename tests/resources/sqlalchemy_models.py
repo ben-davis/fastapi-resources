@@ -65,7 +65,8 @@ class Star(Base):
     elements: AssociationProxy[list[Element]] = association_proxy(
         "element_associations",
         "element",
-        init=False,
+        default_factory=list,
+        creator=lambda element: StarElementAssociation(element=element),
     )
 
 
@@ -82,7 +83,9 @@ class StarElementAssociation(Base):
     )
 
     element: Mapped[Element] = relationship()
-    star: Mapped[Star] = relationship()
+    star: Mapped[Star] = relationship(
+        back_populates="element_associations", default=None
+    )
 
 
 class StarCreate(BaseModel):

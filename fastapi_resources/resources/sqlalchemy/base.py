@@ -2,6 +2,7 @@ import copy
 from dataclasses import dataclass
 from typing import Any, ClassVar, Generic, Optional, Type
 
+from sqlalchemy import ColumnExpressionArgument
 from sqlalchemy import exc as sa_exceptions
 from sqlalchemy import func, inspect, select
 from sqlalchemy.ext.associationproxy import (
@@ -10,6 +11,7 @@ from sqlalchemy.ext.associationproxy import (
 )
 from sqlalchemy.orm import (
     MANYTOONE,
+    ONETOMANY,
     DeclarativeBase,
     Mapper,
     RelationshipDirection,
@@ -39,9 +41,9 @@ def get_instrumented_relationships_from_schema(inspected: Mapper[DeclarativeBase
             many=relationship.uselist or False,
             direction=relationship.direction,
             update_field=list(
-                relationship.local_columns
-                if relationship.direction == MANYTOONE
-                else relationship.remote_side
+                relationship.remote_side
+                if relationship.direction == ONETOMANY
+                else relationship.local_columns
             )[0].name,
         )
         for field, relationship in inspected.relationships.items()
@@ -85,7 +87,12 @@ def get_instrumented_relationships_from_schema_association_proxies(
             # Same with the direction
             direction=target_collection_relationship.direction,
             # The update_field isn't supported for associations, at least right now
-            update_field="",
+            # update_field="",
+            update_field=list(
+                target_relationship.remote_side
+                if target_relationship.direction == ONETOMANY
+                else target_relationship.local_columns
+            )[0].name,
             # We can't load from the association proxy, instead we load from the
             # field the proxy uses
             loaded_field=target_collection,
@@ -272,7 +279,7 @@ class BaseSQLAlchemyResource(
         return attributes
 
     # TODO: Update to a type from sqlalchemy when we require 2.0
-    def get_where(self) -> list[Any]:
+    def get_where(self) -> list[ColumnExpressionArgument[bool]]:
         return []
 
     def get_joins(self) -> list[Any]:
