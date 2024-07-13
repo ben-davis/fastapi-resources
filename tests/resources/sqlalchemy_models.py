@@ -59,7 +59,8 @@ class Star(Base):
 
     element_associations: Mapped[list["StarElementAssociation"]] = relationship(
         back_populates="star",
-        cascade="save-update, merge",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
         default_factory=list,
     )
     elements: AssociationProxy[list[Element]] = association_proxy(

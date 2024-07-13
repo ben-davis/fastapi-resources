@@ -32,16 +32,15 @@ class CreateResourceMixin:
 
             related_resource = RelatedResource(context=self.context)
 
-            where = [related_db_model.id.in_(new_related_ids)]
-
-            # Use the resource's where clause so that if it adds permissions, those
-            # are automatically used when setting the relationship.
-            if related_where := related_resource.get_where():
-                where += related_where
-
             # Do a select to check we have permission, and so we can set the
             # relationship using the full object (required to support dataclasses).
-            results = self.session.scalars(select(related_db_model).where(*where)).all()
+            results = self.session.scalars(
+                # Use the resource's get_select() so that if it adds permissions, those
+                # are automatically used when setting the relationship.
+                related_resource.get_select().where(
+                    related_db_model.id.in_(new_related_ids),
+                )
+            ).all()
 
             if len(results) != len(new_related_ids):
                 raise NotFound()
@@ -92,9 +91,8 @@ class UpdateResourceMixin:
                 # Do a select to check we have permission
                 related_resource = RelatedResource(context=self.context)
                 results = self.session.scalars(
-                    select(related_db_model).where(
+                    related_resource.get_select().where(
                         related_db_model.id.in_(new_related_ids),
-                        *related_resource.get_where(),
                     )
                 ).all()
 
