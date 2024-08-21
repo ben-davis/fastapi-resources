@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import ClassVar, Generic, Optional, Protocol, Type, TypeVar
+from typing import ClassVar, Generic, Literal, Optional, Protocol, Type, TypeVar
 
 from pydantic import BaseModel
 from sqlalchemy import ColumnExpressionArgument, Select
@@ -43,6 +43,15 @@ Relationships = dict[str, SQLAlchemyRelationshipInfo]
 
 TDb = TypeVar("TDb", bound=DeclarativeBase)
 
+Method = (
+    Literal["retrieve"]
+    | Literal["list"]
+    | Literal["delete"]
+    | Literal["delete_all"]
+    | Literal["update"]
+    | Literal["create"]
+)
+
 
 class SQLAlchemyResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb]):
     Db: ClassVar[Type[TDb]]
@@ -79,16 +88,16 @@ class SQLAlchemyResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb])
     def get_related(self, obj: DeclarativeBase, inclusion: list[str]) -> list[TDb]:
         ...
 
-    def get_object(self, id: int | str) -> TDb:
+    def get_object(self, id: int | str, method: Method) -> TDb:
         ...
 
-    def get_select(self) -> Select[TDb]:
+    def get_select(self, method: Method) -> Select[TDb]:
         ...
 
-    def get_where(self) -> list[ColumnExpressionArgument[bool]]:
+    def get_where(self, method: Method) -> list[ColumnExpressionArgument[bool]]:
         ...
 
-    def get_count_select(self) -> Select[TDb]:
+    def get_count_select(self, method: Method) -> Select[TDb]:
         ...
 
 

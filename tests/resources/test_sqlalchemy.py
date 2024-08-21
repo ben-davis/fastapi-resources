@@ -252,7 +252,7 @@ class TestWhere:
             name = "star"
             Db = Star
 
-            def get_where(self):
+            def get_where(self, *args, **kwargs):
                 return [Star.name == "Gazorbo"]
 
         star = Star(name="Sirius")
@@ -280,7 +280,7 @@ class TestWhere:
             name = "planet"
             Db = Planet
 
-            def get_where(self):
+            def get_where(self, *args, **kwargs):
                 assert self.context["yolo"] == 123
                 return [Planet.name == "Hoth"]
 
@@ -310,7 +310,7 @@ class TestWhere:
             name = "planet"
             Db = Planet
 
-            def get_where(self):
+            def get_where(self, *args, **kwargs):
                 assert self.context["yolo"] == 123
                 return [Planet.name == "Hoth"]
 

@@ -37,7 +37,7 @@ class CreateResourceMixin:
             results = self.session.scalars(
                 # Use the resource's get_select() so that if it adds permissions, those
                 # are automatically used when setting the relationship.
-                related_resource.get_select().where(
+                related_resource.get_select(method="create").where(
                     related_db_model.id.in_(new_related_ids),
                 )
             ).all()
@@ -68,7 +68,7 @@ class UpdateResourceMixin:
         relationships: Optional[dict[str, str | int | list[str | int]]] = None,
         **kwargs,
     ):
-        row = self.get_object(id=id)
+        row = self.get_object(id=id, method="update")
 
         for key, value in list(attributes.items()) + list(kwargs.items()):
             setattr(row, key, value)
@@ -91,7 +91,7 @@ class UpdateResourceMixin:
                 # Do a select to check we have permission
                 related_resource = RelatedResource(context=self.context)
                 results = self.session.scalars(
-                    related_resource.get_select().where(
+                    related_resource.get_select(method="update").where(
                         related_db_model.id.in_(new_related_ids),
                     )
                 ).all()
@@ -113,7 +113,7 @@ class UpdateResourceMixin:
 
 class ListResourceMixin:
     def list(self: types.SQLAlchemyResourceProtocol[types.TDb]):
-        select = self.get_select()
+        select = self.get_select(method="list")
 
         paginator = getattr(self, "paginator", None)
 
@@ -121,7 +121,7 @@ class ListResourceMixin:
             select = paginator.paginate_select(select)
 
         rows = self.session.scalars(select).unique().all()
-        count = self.session.scalars(self.get_count_select()).one()
+        count = self.session.scalars(self.get_count_select(method="list")).one()
 
         next = None
 
@@ -133,14 +133,14 @@ class ListResourceMixin:
 
 class RetrieveResourceMixin:
     def retrieve(self: types.SQLAlchemyResourceProtocol[types.TDb], *, id: int | str):
-        row = self.get_object(id=id)
+        row = self.get_object(id=id, method="retrieve")
 
         return row
 
 
 class DeleteResourceMixin:
     def delete(self: types.SQLAlchemyResourceProtocol[types.TDb], *, id: int | str):
-        row = self.get_object(id=id)
+        row = self.get_object(id=id, method="delete")
 
         self.session.delete(row)
         self.session.commit()
@@ -150,7 +150,7 @@ class DeleteResourceMixin:
 
 class DeleteAllResourceMixin:
     def delete_all(self: types.SQLAlchemyResourceProtocol[types.TDb]):
-        where = self.get_where()
+        where = self.get_where(method="delete_all")
 
         self.session.execute(delete(self.Db).where(*where))
         self.session.commit()

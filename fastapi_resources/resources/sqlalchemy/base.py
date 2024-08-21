@@ -279,7 +279,7 @@ class BaseSQLAlchemyResource(
         return attributes
 
     # TODO: Update to a type from sqlalchemy when we require 2.0
-    def get_where(self) -> list[ColumnExpressionArgument[bool]]:
+    def get_where(self, method: types.Method) -> list[ColumnExpressionArgument[bool]]:
         return []
 
     def get_joins(self) -> list[Any]:
@@ -309,7 +309,7 @@ class BaseSQLAlchemyResource(
 
         return options
 
-    def get_select(self):
+    def get_select(self, method: types.Method):
         options = self.get_options()
         select_stmt = select(self.Db)
 
@@ -319,27 +319,24 @@ class BaseSQLAlchemyResource(
         if options := self.get_options():
             select_stmt = select_stmt.options(*options)
 
-        if where := self.get_where():
+        if where := self.get_where(method=method):
             select_stmt = select_stmt.where(*where)
 
         return select_stmt
 
-    def get_count_select(self):
+    def get_count_select(self, method: types.Method):
         select_stmt = select(func.count(self.Db.id))
 
         for join in self.get_joins():
             select_stmt = select_stmt.join(join)
 
-        if where := self.get_where():
+        if where := self.get_where(method=method):
             select_stmt = select_stmt.where(*where)
 
         return select_stmt
 
-    def get_object(
-        self,
-        id: int | str,
-    ) -> types.TDb:
-        select = self.get_select()
+    def get_object(self, id: int | str, method: types.Method) -> types.TDb:
+        select = self.get_select(method=method)
 
         id_field = getattr(self.Db, self.id_field or "id")
 

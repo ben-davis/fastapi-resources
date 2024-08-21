@@ -184,7 +184,7 @@ class StarResource(SQLAlchemyResource[Star]):
 
         return super().get_joins()
 
-    def get_where(self):
+    def get_where(self, *args, **kwargs):
         request = self.context.get("request")
 
         if request and (galaxy_name := request.query_params.get("filter[galaxy.name]")):

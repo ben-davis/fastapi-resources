@@ -3,6 +3,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 from sqlalchemy import ForeignKey, create_engine
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -57,18 +58,26 @@ class Star(Base):
         default=None,
     )
 
-    element_associations: Mapped[list["StarElementAssociation"]] = relationship(
+    _element_associations: Mapped[list["StarElementAssociation"]] = relationship(
         back_populates="star",
         cascade="all, delete-orphan",
         passive_deletes=True,
         default_factory=list,
     )
     elements: AssociationProxy[list[Element]] = association_proxy(
-        "element_associations",
+        "_element_associations",
         "element",
         default_factory=list,
         creator=lambda element: StarElementAssociation(element=element),
     )
+
+    @hybrid_property
+    def element_associations(self):
+        return self._element_associations
+
+    @element_associations.inplace.setter
+    def _element_associations_setter(self, value: list["StarElementAssociation"]):
+        self._element_associations = value
 
 
 class StarElementAssociation(Base):
@@ -85,7 +94,7 @@ class StarElementAssociation(Base):
 
     element: Mapped[Element] = relationship()
     star: Mapped[Star] = relationship(
-        back_populates="element_associations", default=None
+        back_populates="_element_associations", default=None
     )
 
 
@@ -213,7 +222,7 @@ class StarResource(DeleteAllResourceMixin, SQLAlchemyResource[Star]):
 
         return super().get_joins()
 
-    def get_where(self):
+    def get_where(self, *args, **kwargs):
         request = self.context.get("request")
 
         if request and (galaxy_name := request.query_params.get("filter[galaxy.name]")):
