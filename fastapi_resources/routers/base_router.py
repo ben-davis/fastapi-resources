@@ -11,7 +11,7 @@ from typing import (
     runtime_checkable,
 )
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
@@ -225,7 +225,11 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         return {"request": request}
 
     def get_resource_kwargs(self, request: Request):
-        return {"context": self.get_resource_context(request=request)}
+        kwargs = {"context": self.get_resource_context(request=request)}
+        app_state = getattr(getattr(request, "app", None), "state", None)
+        if app_state and (handle := getattr(app_state, "messagebus_handle", None)):
+            kwargs["messagebus_handle"] = handle
+        return kwargs
 
     def build_response(
         self,
@@ -308,60 +312,33 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         *,
         id: Union[int, str],
         request: Request,
-        background_tasks: BackgroundTasks,
     ):
         resource = self.get_resource(request=request)
         if not resource.retrieve:
             raise NotImplementedError("Resource.retrieve not implemented")
 
-        try:
-            row = resource.retrieve(id=id)
-        finally:
-            self._process_tasks(
-                background_tasks=background_tasks,
-                resource=resource,
-            )
-
-        res = self.build_response(rows=row, resource=resource, request=request)
-        return res
+        row = resource.retrieve(id=id)
+        return self.build_response(rows=row, resource=resource, request=request)
 
     async def _list(
         self,
         *,
         request: Request,
-        background_tasks: BackgroundTasks,
     ):
         resource = self.get_resource(request=request)
         if not resource.list:
             raise NotImplementedError("Resource.list not implemented")
 
-        # Next and count are ignored in the base router
-        try:
-            rows, next, count = resource.list()
-        finally:
-            self._process_tasks(
-                background_tasks=background_tasks,
-                resource=resource,
-            )
-
+        rows, next, count = resource.list()
         return self.build_response(
             rows=rows, resource=resource, request=request, count=count, next=next
         )
-
-    def _process_tasks(self, background_tasks: BackgroundTasks, resource: TResource):
-        for task in resource.tasks:
-            background_tasks.add_task(
-                task.func,
-                *task.args,
-                **task.keywords,
-            )
 
     async def _create(
         self,
         *,
         create: TCreatePayload,
         request: Request,
-        background_tasks: BackgroundTasks,
     ):
         resource = self.get_resource(request=request)
 
@@ -369,18 +346,12 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             resource=resource, update=create.model_dump(exclude_unset=True)
         )
 
-        try:
-            row = await self.perform_create(
-                request=request,
-                resource=resource,
-                attributes=attributes,
-                relationships=relationships,
-            )
-        finally:
-            self._process_tasks(
-                background_tasks=background_tasks,
-                resource=resource,
-            )
+        row = await self.perform_create(
+            request=request,
+            resource=resource,
+            attributes=attributes,
+            relationships=relationships,
+        )
 
         return self.build_response(rows=row, resource=resource, request=request)
 
@@ -390,7 +361,6 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         id: Union[int, str],
         update: TUpdatePayload,
         request: Request,
-        background_tasks: BackgroundTasks,
     ):
         resource = self.get_resource(request=request)
 
@@ -398,19 +368,13 @@ class ResourceRouter(APIRouter, Generic[TResource]):
             resource=resource, update=update.model_dump(exclude_unset=True)
         )
 
-        try:
-            row = await self.perform_update(
-                request=request,
-                resource=resource,
-                attributes=attributes,
-                relationships=relationships,
-                id=id,
-            )
-        finally:
-            self._process_tasks(
-                background_tasks=background_tasks,
-                resource=resource,
-            )
+        row = await self.perform_update(
+            request=request,
+            resource=resource,
+            attributes=attributes,
+            relationships=relationships,
+            id=id,
+        )
 
         return self.build_response(rows=row, resource=resource, request=request)
 
@@ -419,34 +383,16 @@ class ResourceRouter(APIRouter, Generic[TResource]):
         *,
         id: Union[int, str],
         request: Request,
-        background_tasks: BackgroundTasks,
     ):
         resource = self.get_resource(request=request)
-
-        try:
-            await self.perform_delete(request=request, resource=resource, id=id)
-        finally:
-            self._process_tasks(
-                background_tasks=background_tasks,
-                resource=resource,
-            )
-
+        await self.perform_delete(request=request, resource=resource, id=id)
         return Response(status_code=204)
 
     async def _delete_all(
         self,
         *,
         request: Request,
-        background_tasks: BackgroundTasks,
     ):
         resource = self.get_resource(request=request)
-
-        try:
-            await self.perform_delete_all(request=request, resource=resource)
-        finally:
-            self._process_tasks(
-                background_tasks=background_tasks,
-                resource=resource,
-            )
-
+        await self.perform_delete_all(request=request, resource=resource)
         return Response(status_code=204)

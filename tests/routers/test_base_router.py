@@ -1,4 +1,3 @@
-import functools
 from typing import Generic, TypeVar
 from unittest import mock
 
@@ -11,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from fastapi_resources import routers
 from fastapi_resources.routers import decorators
-from tests.conftest import OneTimeData
+from tests.conftest import OneTimeData, make_test_bus
 from tests.resources.sqlalchemy_models import (
     Galaxy,
     GalaxyCreate,
@@ -78,14 +77,9 @@ class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
     ):
         attributes["name"] = "ProvidedByPerformUpdate"
 
-        update = resource.update(
+        return resource.update(
             id=id, attributes=attributes, relationships=relationships
         )
-
-        if request.query_params.get("background"):
-            resource.tasks.append(functools.partial(FakeJobs.do_something, arg=10))
-
-        return update
 
     async def perform_create(
         self,
@@ -95,13 +89,7 @@ class GalaxyResourceRouter(routers.ResourceRouter[GalaxyResource]):
         relationships: dict,
     ):
         attributes["name"] = "ProvidedByPerformCreate"
-
-        galaxy = resource.create(attributes=attributes, relationships=relationships)
-
-        if request.query_params.get("background"):
-            resource.tasks.append(functools.partial(FakeJobs.do_something, arg=10))
-
-        return galaxy
+        return resource.create(attributes=attributes, relationships=relationships)
 
     async def perform_delete(self, request: Request, resource: GalaxyResource, id: int):
         FakeJobs.do_something()
@@ -124,13 +112,15 @@ def session():
     transaction = conn.begin()
     session = Session(bind=conn)
 
+    bus = make_test_bus(session)
+
     original_get_resource_kwargs = routers.ResourceRouter.get_resource_kwargs
 
-    # Patch the SQLResource's session
     def get_resource_kwargs(self: routers.ResourceRouter, request: Request):
         return {
             **original_get_resource_kwargs(self=self, request=request),
             "session": session,
+            "messagebus_handle": bus.handle,
         }
 
     with mock.patch.object(
@@ -241,15 +231,6 @@ class TestPerformHooks:
         assert response.status_code == 201
         assert response.json()["data"]["name"] == "ProvidedByPerformCreate"
 
-    def test_perform_create_with_background(self, session: Session):
-        with mock.patch.object(FakeJobs, "do_something") as patched_fake_job:
-            response = client.post(
-                f"/galaxies?background=true", json={"name": "will be ignored"}
-            )
-
-            assert response.status_code == 201
-            patched_fake_job.assert_called_once_with(arg=10)
-
     def test_perform_update(self, session: Session):
         galaxy = Galaxy(name="Milky Way")
         session.add(galaxy)
@@ -263,20 +244,6 @@ class TestPerformHooks:
         assert response.json() == {
             "data": {"id": galaxy.id, "name": "ProvidedByPerformUpdate"}
         }
-
-    def test_perform_update_with_background(self, session: Session):
-        galaxy = Galaxy(name="Milky Way")
-        session.add(galaxy)
-        session.commit()
-
-        with mock.patch.object(FakeJobs, "do_something") as patched_fake_job:
-            response = client.patch(
-                f"/galaxies/{galaxy.id}?background=true",
-                json={"name": "will be ignored"},
-            )
-
-            assert response.status_code == 200
-            patched_fake_job.assert_called_once_with(arg=10)
 
     def test_perform_delete(self, session: Session):
         galaxy = Galaxy(name="Milky Way")

@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from fastapi_resources import routers
-from tests.conftest import OneTimeData
+from tests.conftest import OneTimeData, make_test_bus
 from tests.resources.sqlalchemy_models import (
     Asteroid,
     AsteroidResource,
@@ -46,13 +46,15 @@ def session():
     transaction = conn.begin()
     session = Session(bind=conn)
 
+    bus = make_test_bus(session)
+
     original_get_resource_kwargs = routers.JSONAPIResourceRouter.get_resource_kwargs
 
-    # Patch the SQLResource's session
     def get_resource_kwargs(self: routers.JSONAPIResourceRouter, request: Request):
         return {
             **original_get_resource_kwargs(self=self, request=request),
             "session": session,
+            "messagebus_handle": bus.handle,
         }
 
     with patch.object(

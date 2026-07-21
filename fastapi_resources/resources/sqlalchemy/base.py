@@ -208,10 +208,11 @@ class BaseSQLAlchemyResource(
 ):
     registry: dict[Type[DeclarativeBase], type["BaseSQLAlchemyResource"]] = {}
 
+    Repo: ClassVar[Optional[type]]  # set on subclass or by factory
+    commands: ClassVar[Optional[Any]] = None  # set on subclass or by factory
+
     Paginator: ClassVar[Optional[Type[types.PaginatorProtocol]]]
     paginator: Optional[types.PaginatorProtocol]
-
-    id_field: Optional[str] = None
 
     def __init_subclass__(cls) -> None:
         if Db := getattr(cls, "Db", None):
@@ -225,14 +226,23 @@ class BaseSQLAlchemyResource(
         inclusions: Optional[types.Inclusions] = None,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
+        messagebus_handle=None,
         *args,
         **kwargs,
     ):
-        if session:
-            self.session = session
+        self.messagebus_handle = messagebus_handle or (lambda cmd: None)
+
+        Repo = getattr(self, "Repo", None)
+        context = kwargs.get("context") or {}
+        id_field = getattr(self, "id_field", None)
+        if Repo is not None and session is not None:
+            self.repo = Repo(session=session, context=context, id_field=id_field)
+        elif Repo is not None:
+            # No session — repo won't be usable; allow for testing without DB
+            self.repo = None
         else:
-            assert self.engine, "A session or an engine must be given."
-            self.session = Session(self.engine)
+            # Legacy path: no Repo defined, store session directly for old tests
+            self.session = session
 
         if Paginator := getattr(self, "Paginator", None):
             self.paginator = Paginator(cursor=cursor, limit=limit)
@@ -240,56 +250,25 @@ class BaseSQLAlchemyResource(
         super().__init__(inclusions=inclusions, *args, **kwargs)
 
     def close(self):
-        self.session.close()
+        if repo := getattr(self, "repo", None):
+            if repo and hasattr(repo, "session"):
+                repo.session.close()
+        elif session := getattr(self, "session", None):
+            session.close()
 
-    @classmethod
-    def get_relationships(cls) -> types.Relationships:
-        """Builds the relationship graph for the current resource.
-
-        TODO: Have the relationship point to the resource, rather than the schema. Use
-            the registry to lookup the related resource.
-
-        Used to:
-          - Validate a given inclusion resolves to a relationship (done in the base class)
-          - To retrieve all the objects along an inclusion with their schemas
-        """
-        read_fields = set(getattr(cls.Read, "__relationships__", set()))
-
-        relationships = get_relationships_from_schema(schema=cls.Db)
-
-        return {
-            name: info for name, info in relationships.items() if name in read_fields
-        }
-
-    @classmethod
-    def get_attributes(cls) -> set[str]:
-        attributes = set()
-        relationships = cls.get_relationships()
-
-        # These are the fields according to the pydantic model
-        fields = cls.Read.model_fields
-        for field in fields:
-            # If the field refers to a foreign key field we skip it as it'll be
-            # included in get_relationships.
-            if field in relationships:
-                continue
-
-            attributes.add(field)
-
-        return attributes
-
-    # TODO: Update to a type from sqlalchemy when we require 2.0
-    def get_where(self, method: types.Method) -> list[ColumnExpressionArgument[bool]]:
-        return []
-
-    def get_joins(self) -> list[Any]:
-        return []
+    def generate_id(self):
+        import uuid
+        return uuid.uuid4()
 
     def get_options(self):
+        """Build SQLAlchemy joinedload options from current inclusions.
+
+        Called by list/retrieve to pass eager-loading options to the repo.
+        Kept on the resource because it needs the registry to resolve resource classes.
+        """
         options = []
         inclusions = self.inclusions or []
 
-        # Build the query options based on the include
         for inclusion in inclusions:
             zipped_inclusion = self.zipped_inclusions_with_resource(
                 inclusion=inclusion,
@@ -309,38 +288,21 @@ class BaseSQLAlchemyResource(
 
         return options
 
-    def get_select(self, method: types.Method):
-        options = self.get_options()
-        select_stmt = select(self.Db)
+    @classmethod
+    def get_relationships(cls) -> types.Relationships:
+        read_fields = set(getattr(cls.Read, "__relationships__", set()))
+        relationships = get_relationships_from_schema(schema=cls.Db)
+        return {
+            name: info for name, info in relationships.items() if name in read_fields
+        }
 
-        for join in self.get_joins():
-            select_stmt = select_stmt.join(join)
-
-        if options := self.get_options():
-            select_stmt = select_stmt.options(*options)
-
-        if where := self.get_where(method=method):
-            select_stmt = select_stmt.where(*where)
-
-        return select_stmt
-
-    def get_count_select(self, method: types.Method):
-        select_stmt = select(func.count(self.Db.id))
-
-        for join in self.get_joins():
-            select_stmt = select_stmt.join(join)
-
-        if where := self.get_where(method=method):
-            select_stmt = select_stmt.where(*where)
-
-        return select_stmt
-
-    def get_object(self, id: int | str, method: types.Method) -> types.TDb:
-        select = self.get_select(method=method)
-
-        id_field = getattr(self.Db, self.id_field or "id")
-
-        try:
-            return self.session.scalars(select.where(id_field == id)).unique().one()
-        except sa_exceptions.NoResultFound:
-            raise NotFound(f"{self.name} not found")
+    @classmethod
+    def get_attributes(cls) -> set[str]:
+        attributes = set()
+        relationships = cls.get_relationships()
+        fields = cls.Read.model_fields
+        for field in fields:
+            if field in relationships:
+                continue
+            attributes.add(field)
+        return attributes

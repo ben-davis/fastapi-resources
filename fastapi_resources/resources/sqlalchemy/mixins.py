@@ -1,7 +1,7 @@
+import dataclasses
 from typing import Optional
 
-from sqlalchemy import delete, select
-from sqlalchemy.orm import MANYTOONE
+from sqlalchemy import delete
 
 from fastapi_resources.resources.sqlalchemy import types
 from fastapi_resources.resources.sqlalchemy.exceptions import NotFound
@@ -11,52 +11,39 @@ class CreateResourceMixin:
     def create(
         self: types.SQLAlchemyResourceProtocol[types.TDb],
         attributes: dict,
-        relationships: Optional[dict[str, str | int | list[str | int]]] = None,
+        relationships: Optional[dict] = None,
         **kwargs,
     ):
-        create_kwargs = attributes | kwargs
         relationships = relationships or {}
-        model_relationships = self.relationships
+        cmd_kwargs = dict(attributes)
+        cmd_kwargs.update(kwargs)
 
-        for field, related_ids in relationships.items():
-            relationship = model_relationships[field]
-            direction = relationship.direction
+        # Map relationship field names → command field names (IDs)
+        for field_name, rel_value in relationships.items():
+            rel_info = self.relationships.get(field_name)
+            if rel_info and not rel_info.many:
+                cmd_kwargs[f"{field_name}_id"] = rel_value
+            else:
+                singular = field_name[:-1] if field_name.endswith("s") else field_name
+                cmd_kwargs[f"{singular}_ids"] = (
+                    rel_value if isinstance(rel_value, list) else [rel_value]
+                )
 
-            RelatedResource = self.registry[
-                relationship.schema_with_relationships.schema
-            ]
-            related_db_model = RelatedResource.Db
-            new_related_ids = (
-                related_ids if isinstance(related_ids, list) else [related_ids]
+        # Add a pre-generated ID if the command has an id field
+        commands = getattr(self, "commands", None)
+        if commands and hasattr(commands, "Create"):
+            cmd_field_names = {f.name for f in dataclasses.fields(commands.Create)}
+            if "id" in cmd_field_names:
+                cmd_kwargs["id"] = self.generate_id()
+            cmd = commands.Create(**cmd_kwargs)
+        else:
+            raise NotImplementedError(
+                f"{type(self).__name__} has no commands.Create. "
+                "Set commands on the resource or override create()."
             )
 
-            related_resource = RelatedResource(context=self.context)
-
-            # Do a select to check we have permission, and so we can set the
-            # relationship using the full object (required to support dataclasses).
-            results = self.session.scalars(
-                # Use the resource's get_select() so that if it adds permissions, those
-                # are automatically used when setting the relationship.
-                related_resource.get_select(method="create").where(
-                    related_db_model.id.in_(new_related_ids),
-                )
-            ).all()
-
-            if len(results) != len(new_related_ids):
-                raise NotFound()
-
-            if direction == MANYTOONE:
-                results = results[0]
-
-            # Can update locally via a setattr, using the field name and the resolved
-            # object.
-            create_kwargs[field] = results
-
-        row = self.Db(**create_kwargs)
-        self.session.add(row)
-        self.session.commit()
-
-        return row
+        created_id = self.messagebus_handle(cmd)
+        return self.repo.get(created_id)
 
 
 class UpdateResourceMixin:
@@ -65,94 +52,66 @@ class UpdateResourceMixin:
         *,
         id: int | str,
         attributes: dict,
-        relationships: Optional[dict[str, str | int | list[str | int]]] = None,
+        relationships: Optional[dict] = None,
         **kwargs,
     ):
-        row = self.get_object(id=id, method="update")
+        relationships = relationships or {}
+        cmd_kwargs = {"id": id}
+        cmd_kwargs.update(attributes)
+        cmd_kwargs.update(kwargs)
 
-        for key, value in list(attributes.items()) + list(kwargs.items()):
-            setattr(row, key, value)
-
-        model_relationships = self.relationships
-
-        if relationships:
-            for field, related_ids in relationships.items():
-                relationship = model_relationships[field]
-                direction = relationship.direction
-
-                RelatedResource = self.registry[
-                    relationship.schema_with_relationships.schema
-                ]
-                related_db_model = RelatedResource.Db
-                new_related_ids = (
-                    related_ids if isinstance(related_ids, list) else [related_ids]
+        for field_name, rel_value in relationships.items():
+            rel_info = self.relationships.get(field_name)
+            if rel_info and not rel_info.many:
+                cmd_kwargs[f"{field_name}_id"] = rel_value
+            else:
+                singular = field_name[:-1] if field_name.endswith("s") else field_name
+                cmd_kwargs[f"{singular}_ids"] = (
+                    rel_value if isinstance(rel_value, list) else [rel_value]
                 )
 
-                # Do a select to check we have permission
-                related_resource = RelatedResource(context=self.context)
-                results = self.session.scalars(
-                    related_resource.get_select(method="update").where(
-                        related_db_model.id.in_(new_related_ids),
-                    )
-                ).all()
+        commands = getattr(self, "commands", None)
+        if commands and hasattr(commands, "Update"):
+            # Only pass fields the command actually declares
+            valid = {f.name for f in dataclasses.fields(commands.Update)}
+            cmd = commands.Update(**{k: v for k, v in cmd_kwargs.items() if k in valid})
+        else:
+            raise NotImplementedError(
+                f"{type(self).__name__} has no commands.Update. "
+                "Set commands on the resource or override update()."
+            )
 
-                if len(results) != len(new_related_ids):
-                    raise NotFound(f"{related_resource.name} not found")
-
-                if direction == MANYTOONE:
-                    results = results[0]
-
-                setattr(row, relationship.field, results)
-
-        self.session.add(row)
-        self.session.commit()
-        self.session.refresh(row)
-
-        return row
+        updated_id = self.messagebus_handle(cmd)
+        return self.repo.get(updated_id)
 
 
 class ListResourceMixin:
     def list(self: types.SQLAlchemyResourceProtocol[types.TDb]):
-        select = self.get_select(method="list")
-
+        options = self.get_options()
         paginator = getattr(self, "paginator", None)
-
-        if paginator:
-            select = paginator.paginate_select(select)
-
-        rows = self.session.scalars(select).unique().all()
-        count = self.session.scalars(self.get_count_select(method="list")).one()
-
-        next = None
-
-        if paginator:
-            next = paginator.get_next(count=count)
-
-        return rows, next, count
+        return self.repo.list(options=options or None, paginator=paginator)
 
 
 class RetrieveResourceMixin:
     def retrieve(self: types.SQLAlchemyResourceProtocol[types.TDb], *, id: int | str):
-        row = self.get_object(id=id, method="retrieve")
-
-        return row
+        options = self.get_options()
+        return self.repo.get(id, options=options or None)
 
 
 class DeleteResourceMixin:
     def delete(self: types.SQLAlchemyResourceProtocol[types.TDb], *, id: int | str):
-        row = self.get_object(id=id, method="delete")
-
-        self.session.delete(row)
-        self.session.commit()
-
+        commands = getattr(self, "commands", None)
+        if commands and hasattr(commands, "Delete"):
+            self.messagebus_handle(commands.Delete(id=id))
+        else:
+            raise NotImplementedError(
+                f"{type(self).__name__} has no commands.Delete. "
+                "Set commands on the resource or override delete()."
+            )
         return {"ok": True}
 
 
 class DeleteAllResourceMixin:
     def delete_all(self: types.SQLAlchemyResourceProtocol[types.TDb]):
-        where = self.get_where(method="delete_all")
-
-        self.session.execute(delete(self.Db).where(*where))
-        self.session.commit()
-
+        self.repo.delete_all()
         return [], None, 0

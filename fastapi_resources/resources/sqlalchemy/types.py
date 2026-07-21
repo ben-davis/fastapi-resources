@@ -1,9 +1,7 @@
 from dataclasses import dataclass
-from typing import ClassVar, Generic, Literal, Optional, Protocol, Type, TypeVar
+from typing import Any, Callable, ClassVar, Generic, Literal, Optional, Protocol, Type, TypeVar
 
 from pydantic import BaseModel
-from sqlalchemy import ColumnExpressionArgument, Select
-from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, RelationshipDirection, Session
 
 from fastapi_resources.resources import types
@@ -15,7 +13,7 @@ class PaginatorProtocol(Protocol):
     def __init__(self, cursor: Optional[str] = None, limit: Optional[int] = None):
         ...
 
-    def paginate_select(self, select: Select) -> Select:
+    def paginate_select(self, select) -> Any:
         ...
 
     def get_next(self, count: int) -> Optional[str]:
@@ -58,46 +56,32 @@ class SQLAlchemyResourceProtocol(types.ResourceProtocol, Protocol, Generic[TDb])
     Read: ClassVar[Type[BaseModel]]
     Create: ClassVar[Optional[Type[BaseModel]]] = None
     Update: ClassVar[Optional[Type[BaseModel]]] = None
-
-    engine: ClassVar[Optional[Engine]] = None
-
-    session: Session
+    commands: ClassVar[Optional[Any]] = None
 
     registry: ClassVar[
         dict[Type[DeclarativeBase], type["SQLAlchemyResourceProtocol"]]
     ] = {}
 
+    repo: Any
+    messagebus_handle: Callable[..., Any]
+
     Paginator: Optional[PaginatorProtocol]
 
     @classmethod
-    def get_relationships(
-        cls,
-    ) -> dict[str, SQLAlchemyRelationshipInfo]:
-        """Get the relationships for the resource."""
+    def get_relationships(cls) -> dict[str, SQLAlchemyRelationshipInfo]:
         ...
 
     @classmethod
     def get_attributes(cls) -> set[str]:
-        """Get the non-relationships attributes for the resource.
-
-        The attributes that end up in the response depend on those specified in
-        the Read schema; it'll be a subset of those returned here.
-        """
         ...
 
     def get_related(self, obj: DeclarativeBase, inclusion: list[str]) -> list[TDb]:
         ...
 
-    def get_object(self, id: int | str, method: Method) -> TDb:
+    def get_options(self) -> list:
         ...
 
-    def get_select(self, method: Method) -> Select[TDb]:
-        ...
-
-    def get_where(self, method: Method) -> list[ColumnExpressionArgument[bool]]:
-        ...
-
-    def get_count_select(self, method: Method) -> Select[TDb]:
+    def generate_id(self) -> Any:
         ...
 
 

@@ -5,21 +5,18 @@ from sqlalchemy import ForeignKey, create_engine
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import (
-    DeclarativeBase,
     Mapped,
-    MappedAsDataclass,
     mapped_column,
     relationship,
 )
 
+from fastapi_resources import build_commands, build_sqlalchemy_repo
 from fastapi_resources.resources import SQLAlchemyResource
 from fastapi_resources.resources.sqlalchemy import paginators
 from fastapi_resources.resources.sqlalchemy.mixins import DeleteAllResourceMixin
 from tests.resources.sqlalchemy_base import Base
 
 from .planet import Planet, PlanetCreate, PlanetRead
-
-# from sqlmodel import Field, Relationship, BaseModel, create_engine
 
 
 sqlite_url = "sqlite+pysqlite://"
@@ -114,7 +111,7 @@ class StarRead(BaseModel):
 
 
 class StarUpdate(BaseModel):
-    name: Optional[str]
+    name: Optional[str] = None
 
     __relationships__ = ["planets", "galaxy"]
 
@@ -174,15 +171,22 @@ class Moon(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     name: Mapped[str]
-    planet_id: Mapped[Optional[int]] = mapped_column(
+    planet_id: Mapped[Optional[str]] = mapped_column(
         ForeignKey("planet.id"), init=False
     )
-    planet: Mapped[Planet] = relationship()
+    planet: Mapped[Optional[Planet]] = relationship(default=None, init=False)
+
+
+class MoonCreate(BaseModel):
+    name: str
+
+    __relationships__ = ["planet"]
 
 
 class MoonRead(BaseModel):
     id: int
     name: str
+    planet_id: Optional[str] = None
 
     __relationships__ = ["planet"]
 
@@ -198,65 +202,92 @@ class AsteroidRead(BaseModel):
     id: str = Field(alias="name")
 
 
+# --- Repos ---
+
+_StarBaseRepo = build_sqlalchemy_repo(Star)
+
+
+class StarFilteredRepo(_StarBaseRepo):
+    """Star repo with optional galaxy-name filtering via request context."""
+
+    def get_joins(self):
+        request = self.context.get("request")
+        if request and request.query_params.get("filter[galaxy.name]"):
+            return [Star.galaxy]
+        return super().get_joins()
+
+    def get_where(self, method):
+        request = self.context.get("request")
+        if request and (galaxy_name := request.query_params.get("filter[galaxy.name]")):
+            return [Galaxy.name == galaxy_name]
+        return []
+
+
+GalaxyRepo = build_sqlalchemy_repo(Galaxy)
+PlanetRepo = build_sqlalchemy_repo(Planet)
+MoonRepo = build_sqlalchemy_repo(Moon)
+AsteroidRepo = build_sqlalchemy_repo(Asteroid)
+ElementRepo = build_sqlalchemy_repo(Element)
+
+# --- Commands ---
+
+StarCommands = build_commands(Star, Create=StarCreate, Update=StarUpdate)
+GalaxyCommands = build_commands(Galaxy, Create=GalaxyCreate, Update=GalaxyUpdate)
+PlanetCommands = build_commands(Planet, Create=PlanetCreate)
+MoonCommands = build_commands(Moon, Create=MoonCreate)
+
+# --- Resources ---
+
+
 class PlanetResource(SQLAlchemyResource):
-    engine = engine
     name = "planet"
     Db = Planet
     Read = PlanetRead
     Create = PlanetCreate
+    Repo = PlanetRepo
+    commands = PlanetCommands
 
 
 class StarResource(DeleteAllResourceMixin, SQLAlchemyResource[Star]):
-    engine = engine
     name = "star"
     Db = Star
     Read = StarRead
     Create = StarCreate
     Update = StarUpdate
     Paginator = paginators.LimitOffsetPaginator
-
-    def get_joins(self):
-        request = self.context.get("request")
-        if request and request.query_params.get("filter[galaxy.name]"):
-            return [Star.galaxy]
-
-        return super().get_joins()
-
-    def get_where(self, *args, **kwargs):
-        request = self.context.get("request")
-
-        if request and (galaxy_name := request.query_params.get("filter[galaxy.name]")):
-            return [Galaxy.name == galaxy_name]
-
-        return []
+    Repo = StarFilteredRepo
+    commands = StarCommands
 
 
 class GalaxyResource(SQLAlchemyResource[Galaxy]):
-    engine = engine
     name = "galaxy"
     Db = Galaxy
     Read = GalaxyRead
     Create = GalaxyCreate
     Update = GalaxyUpdate
+    Repo = GalaxyRepo
+    commands = GalaxyCommands
 
 
 class MoonResource(SQLAlchemyResource[Moon]):
-    engine = engine
     name = "moon"
     Db = Moon
     Read = MoonRead
+    Create = MoonCreate
+    Repo = MoonRepo
+    commands = MoonCommands
 
 
 class AsteroidResource(SQLAlchemyResource[Asteroid]):
-    engine = engine
     name = "asteroid"
     Db = Asteroid
     Read = AsteroidRead
     id_field = "name"
+    Repo = AsteroidRepo
 
 
 class ElementResource(SQLAlchemyResource[Element]):
-    engine = engine
     name = "element"
     Db = Element
     Read = ElementRead
+    Repo = ElementRepo

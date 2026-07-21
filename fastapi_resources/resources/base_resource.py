@@ -40,7 +40,6 @@ class Resource(ResourceProtocol, Generic[TDb]):
     ):
         self.inclusions = inclusions or []
         self.context = context or {}
-        self.tasks = []
         self.relationships = self.get_relationships()
 
         if inclusions:
