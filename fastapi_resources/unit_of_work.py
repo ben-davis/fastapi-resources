@@ -47,6 +47,9 @@ class SqlAlchemyUnitOfWork(AbstractUnitOfWork):
         self.session.close()
 
     def commit(self) -> None:
+        # Flush first so freshly-added (pending) objects enter the identity_map;
+        # otherwise their domain_events would be missed (they live in session.new).
+        self.session.flush()
         # Collect domain events before committing (identity_map cleared after commit)
         for obj in list(self.session.identity_map.values()):
             events = list(getattr(obj, "domain_events", []))
